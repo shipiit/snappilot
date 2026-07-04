@@ -102,7 +102,15 @@ final class EditorModel: ObservableObject {
 
     @Published var framed = false
 
+    /// When set, the editor is annotating a video frame — Done bakes this overlay onto the
+    /// clip instead of saving an image.
+    var onApplyToVideo: ((CGImage) -> Void)?
+    var isVideoMode: Bool { onApplyToVideo != nil }
+
     func flattened() -> CGImage { AnnotationRenderer.flatten(base: base, doc: doc) }
+
+    /// Annotations on a transparent canvas at the frame's pixel size — for video overlay.
+    func overlayImage() -> CGImage { AnnotationRenderer.flatten(base: base, doc: doc, transparent: true) }
 
     /// The image to copy/save — flattened annotations, optionally wrapped in a polished frame.
     func exportImage() -> CGImage {

@@ -8,9 +8,23 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let model: EditorModel
     var onClose: ((EditorWindowController) -> Void)?
 
-    init(image: CGImage, appState: AppState, recordID: String? = nil) {
+    private static var retainedVideoEditors: [EditorWindowController] = []
+
+    /// Open the editor to annotate a video frame; `onApply` receives the overlay to bake.
+    static func presentVideoAnnotate(frame: CGImage, appState: AppState,
+                                     onApply: @escaping (CGImage) -> Void) {
+        let c = EditorWindowController(image: frame, appState: appState, videoApply: onApply)
+        retainedVideoEditors.append(c)
+        c.onClose = { ctrl in retainedVideoEditors.removeAll { $0 === ctrl } }
+        c.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    init(image: CGImage, appState: AppState, recordID: String? = nil,
+         videoApply: ((CGImage) -> Void)? = nil) {
         self.model = EditorModel(base: image, appState: appState)
         self.model.libraryRecordID = recordID
+        self.model.onApplyToVideo = videoApply
 
         // Open large — a spacious editing surface like Snagit, clamped to the screen.
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
@@ -20,7 +34,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: contentSize),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
-        window.title = "Snappilot — Edit"
+        window.title = videoApply == nil ? "Snappilot — Edit" : "Snappilot — Annotate Video"
         window.isReleasedWhenClosed = false
         window.center()
 

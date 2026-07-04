@@ -29,7 +29,9 @@ enum AnnotationRenderer {
     // CIContext is safe to share across threads (Apple docs); opt out of Sendable checking.
     nonisolated(unsafe) private static let ciContext = CIContext()
 
-    static func flatten(base: CGImage, doc: AnnotationDocument) -> CGImage {
+    /// Flatten annotations onto `base`. When `transparent` is true the base is left out
+    /// (annotations on a clear canvas) — used to bake an overlay onto video.
+    static func flatten(base: CGImage, doc: AnnotationDocument, transparent: Bool = false) -> CGImage {
         let w = base.width, h = base.height
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,
                                          bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
@@ -40,8 +42,8 @@ enum AnnotationRenderer {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = ns
         let ctx = ns.cgContext
-        ctx.draw(base, in: CGRect(x: 0, y: 0, width: w, height: h))
-        for a in doc.items { draw(a, imageHeight: h, base: base, ctx: ctx) }
+        if !transparent { ctx.draw(base, in: CGRect(x: 0, y: 0, width: w, height: h)) }
+        for a in doc.items { draw(a, imageHeight: h, base: base, ctx: ctx, transparent: transparent) }
         NSGraphicsContext.restoreGraphicsState()
 
         return rep.cgImage ?? base
@@ -54,7 +56,7 @@ enum AnnotationRenderer {
     }
     private static func flipY(_ p: CGPoint, _ h: Int) -> NSPoint { NSPoint(x: p.x, y: CGFloat(h) - p.y) }
 
-    private static func draw(_ a: Annotation, imageHeight h: Int, base: CGImage, ctx: CGContext) {
+    private static func draw(_ a: Annotation, imageHeight h: Int, base: CGImage, ctx: CGContext, transparent: Bool = false) {
         let color = nsColor(fromHex: a.colorHex).withAlphaComponent(a.opacity)
         color.set()
         let lw = CGFloat(a.thickness)
@@ -88,7 +90,14 @@ enum AnnotationRenderer {
         case .step:
             drawStep(a.stepLabel, center: flipY(a.start, h), radius: max(14, lw * 5), color: color)
         case .blur:
-            drawBlur(rectTL: selectionRect(from: a.start, to: a.end), imageHeight: h, base: base, ctx: ctx)
+            if transparent {
+                // No live pixels to sample over video — draw a solid redaction block.
+                let r = blRect(start: a.start, end: a.end, imageHeight: h)
+                NSColor.black.withAlphaComponent(0.9).setFill()
+                NSBezierPath(roundedRect: r, xRadius: 4, yRadius: 4).fill()
+            } else {
+                drawBlur(rectTL: selectionRect(from: a.start, to: a.end), imageHeight: h, base: base, ctx: ctx)
+            }
         case .stamp:
             let s = (a.text.isEmpty ? "⭐️" : a.text) as NSString
             let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: max(24, lw * 12))]

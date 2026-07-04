@@ -81,6 +81,8 @@ struct VideoPreviewView: View {
                 Image(systemName: "video.fill").foregroundStyle(.secondary)
                 Text(title).font(.callout).lineLimit(1)
                 Spacer()
+                Button { annotate() } label: { Label("Annotate", systemImage: "pencil.tip.crop.circle") }
+                    .help("Draw on the video — baked in for the whole clip")
                 Button { trim() } label: { Label("Trim", systemImage: "scissors") }
                     .help("Trim the start/end, then export the clip")
                 Button { exportGIF() } label: { Label("GIF", systemImage: "photo.stack") }
@@ -95,6 +97,28 @@ struct VideoPreviewView: View {
             .background(.bar)
         }
         .frame(minWidth: 720, minHeight: 480)
+    }
+
+    private func annotate() {
+        Toast.show("Loading frame…", symbol: "pencil.tip.crop.circle")
+        Task {
+            guard let frame = await VideoAnnotator.grabFrame(from: pc.url) else {
+                Toast.show("Couldn't read the video", symbol: "exclamationmark.triangle.fill"); return
+            }
+            EditorWindowController.presentVideoAnnotate(frame: frame, appState: .shared) { overlay in
+                let panel = NSSavePanel()
+                panel.allowedContentTypes = [.mpeg4Movie]
+                panel.nameFieldStringValue = "\(title)-annotated.mp4"
+                guard panel.runModal() == .OK, let dest = panel.url else { return }
+                Toast.show("Rendering annotated video…", symbol: "gearshape")
+                Task {
+                    let ok = await VideoAnnotator.bake(overlay: overlay, over: pc.url, to: dest)
+                    Toast.show(ok ? "Annotated video saved" : "Render failed",
+                               symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    if ok { NSWorkspace.shared.activateFileViewerSelecting([dest]) }
+                }
+            }
+        }
     }
 
     private func trim() {

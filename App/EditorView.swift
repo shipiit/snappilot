@@ -108,7 +108,7 @@ struct EditorView: View {
             Button { grabText() } label: { Label("Grab Text", systemImage: "text.viewfinder") }
             Button { copy() } label: { Label("Copy", systemImage: "doc.on.doc") }
             Button { save() } label: { Label("Save", systemImage: "square.and.arrow.down") }
-            Button { done() } label: { Text("Done").bold() }
+            Button { done() } label: { Text(model.isVideoMode ? "Apply to Video" : "Done").bold() }
                 .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
@@ -403,7 +403,10 @@ struct EditorView: View {
     }
 
     // MARK: Actions
-    private func done() { persist(); onDone() }
+    private func done() {
+        if let apply = model.onApplyToVideo { apply(model.overlayImage()); onDone(); return }
+        persist(); onDone()
+    }
     private func copy() { Exporter.copyToPasteboard(model.exportImage()); persist(); Toast.show("Copied to clipboard") }
     private func save() {
         if Exporter.savePNG(model.exportImage()) != nil { persist(); Toast.show("Saved") }
