@@ -33,6 +33,13 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Reuse this window for a new capture: save the current one first, then swap in the new image.
+    func load(image: CGImage, recordID: String?) {
+        model.persistToLibrary()
+        model.reset(base: image, recordID: recordID)
+        window?.makeKeyAndOrderFront(nil)
+    }
+
     func windowWillClose(_ notification: Notification) {
         onClose?(self)
     }

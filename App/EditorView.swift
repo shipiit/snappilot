@@ -409,21 +409,8 @@ struct EditorView: View {
         if Exporter.savePNG(model.exportImage()) != nil { persist(); Toast.show("Saved") }
     }
 
-    /// Write the annotated image back into its library record (created at capture time),
-    /// then refresh OCR text for search.
-    private func persist() {
-        let flat = model.exportImage()
-        guard let store = model.appState?.library else { return }
-        if let id = model.libraryRecordID {
-            store.overwrite(id: id, image: flat)
-            Task {
-                let text = (try? await OCR.recognize(flat, languages: model.appState?.ocrLanguages ?? ["en-US"]))?.joined(separator: "\n") ?? ""
-                if !text.isEmpty { store.setOCRText(id: id, text) }
-            }
-        } else if let rec = store.saveImage(flat) {
-            model.libraryRecordID = rec.id
-        }
-    }
+    /// Write the annotated image back into its library record, then refresh OCR for search.
+    private func persist() { model.persistToLibrary() }
     private func grabText() {
         Task {
             let lines = (try? await OCR.recognize(model.base, languages: model.appState?.ocrLanguages ?? ["en-US"])) ?? []

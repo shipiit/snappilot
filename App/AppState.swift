@@ -28,7 +28,7 @@ final class AppState: ObservableObject {
     }
 
     private var selector: RegionSelector?
-    private var editors: [ObjectIdentifier: EditorWindowController] = [:]
+    private var editor: EditorWindowController?      // one reusable editor window
     private var hiddenWindows: [NSWindow] = []
 
     // MARK: Get our own windows out of the shot (like Snagit)
@@ -272,10 +272,15 @@ final class AppState: ObservableObject {
         // Save the capture to the library immediately so it shows up right away; the
         // editor overwrites this file with annotations when the user hits Done.
         let record = library.saveImage(result.image)
-        let controller = EditorWindowController(image: result.image, appState: self, recordID: record?.id)
-        editors[ObjectIdentifier(controller)] = controller
-        controller.onClose = { [weak self] c in self?.editors[ObjectIdentifier(c)] = nil }
-        controller.showWindow(nil)
+        if let editor {
+            // Reuse the one editor window — replace its content (saving the old first).
+            editor.load(image: result.image, recordID: record?.id)
+        } else {
+            let controller = EditorWindowController(image: result.image, appState: self, recordID: record?.id)
+            controller.onClose = { [weak self] _ in self?.editor = nil }
+            editor = controller
+            controller.showWindow(nil)
+        }
         NSApp.activate(ignoringOtherApps: true)
     }
 }

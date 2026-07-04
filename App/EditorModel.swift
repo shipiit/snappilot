@@ -110,6 +110,32 @@ final class EditorModel: ObservableObject {
         return framed ? ImagePolish.frame(flat) : flat
     }
 
+    /// Write the current (annotated) image back into its library record, refreshing OCR.
+    func persistToLibrary() {
+        guard let store = appState?.library else { return }
+        let flat = exportImage()
+        if let id = libraryRecordID {
+            store.overwrite(id: id, image: flat)
+            let langs = appState?.ocrLanguages ?? ["en-US"]
+            Task {
+                let text = (try? await OCR.recognize(flat, languages: langs))?.joined(separator: "\n") ?? ""
+                if !text.isEmpty { store.setOCRText(id: id, text) }
+            }
+        } else if let rec = store.saveImage(flat) {
+            libraryRecordID = rec.id
+        }
+    }
+
+    /// Load a brand-new capture into this same editor (reusing one window).
+    func reset(base newBase: CGImage, recordID: String?) {
+        base = newBase
+        libraryRecordID = recordID
+        doc = AnnotationDocument()
+        undoStack.removeAll(); redoStack.removeAll()
+        selectedID = nil; editingTextID = nil
+        framed = false
+    }
+
     /// OCR the image, find emails / card numbers, and blur them out automatically.
     func autoRedact() {
         let img = base
