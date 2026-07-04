@@ -98,6 +98,11 @@ struct EditorView: View {
                 }
             }
             Spacer(minLength: 8)
+            Button { model.framed.toggle() } label: {
+                Label("Frame", systemImage: "square.on.square.dashed")
+            }
+            .background(model.framed ? Color.accentColor.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .help("Wrap in a polished gradient frame when saving/copying")
             Button { model.autoRedact() } label: { Label("Redact", systemImage: "eye.slash") }
                 .help("Auto-blur detected emails & card numbers")
             Button { grabText() } label: { Label("Grab Text", systemImage: "text.viewfinder") }
@@ -399,15 +404,15 @@ struct EditorView: View {
 
     // MARK: Actions
     private func done() { persist(); onDone() }
-    private func copy() { Exporter.copyToPasteboard(model.flattened()); persist(); Toast.show("Copied to clipboard") }
+    private func copy() { Exporter.copyToPasteboard(model.exportImage()); persist(); Toast.show("Copied to clipboard") }
     private func save() {
-        if Exporter.savePNG(model.flattened()) != nil { persist(); Toast.show("Saved") }
+        if Exporter.savePNG(model.exportImage()) != nil { persist(); Toast.show("Saved") }
     }
 
     /// Write the annotated image back into its library record (created at capture time),
     /// then refresh OCR text for search.
     private func persist() {
-        let flat = model.flattened()
+        let flat = model.exportImage()
         guard let store = model.appState?.library else { return }
         if let id = model.libraryRecordID {
             store.overwrite(id: id, image: flat)

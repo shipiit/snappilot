@@ -100,7 +100,15 @@ final class EditorModel: ObservableObject {
         selectedID = nil; editingTextID = nil
     }
 
+    @Published var framed = false
+
     func flattened() -> CGImage { AnnotationRenderer.flatten(base: base, doc: doc) }
+
+    /// The image to copy/save — flattened annotations, optionally wrapped in a polished frame.
+    func exportImage() -> CGImage {
+        let flat = flattened()
+        return framed ? ImagePolish.frame(flat) : flat
+    }
 
     /// OCR the image, find emails / card numbers, and blur them out automatically.
     func autoRedact() {
