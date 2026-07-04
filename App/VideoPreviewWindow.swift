@@ -39,6 +39,8 @@ struct VideoPreviewView: View {
                 Image(systemName: "video.fill").foregroundStyle(.secondary)
                 Text(title).font(.callout).lineLimit(1)
                 Spacer()
+                Button { exportGIF() } label: { Label("GIF", systemImage: "photo.stack") }
+                    .help("Export as animated GIF")
                 Button { exportCopy() } label: { Label("Export", systemImage: "square.and.arrow.down") }
                 Button { copyFile() } label: { Label("Copy", systemImage: "doc.on.doc") }
                 Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: {
@@ -64,6 +66,20 @@ struct VideoPreviewView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects([url as NSURL])
         Toast.show("Copied video")
+    }
+
+    private func exportGIF() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.gif]
+        panel.nameFieldStringValue = "\(title).gif"
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        Toast.show("Exporting GIF…", symbol: "photo.stack")
+        Task {
+            let ok = await GIFExporter.export(from: url, to: dest)
+            Toast.show(ok ? "GIF saved" : "GIF export failed",
+                       symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            if ok { NSWorkspace.shared.activateFileViewerSelecting([dest]) }
+        }
     }
 }
 
