@@ -47,10 +47,24 @@ Snappilot is a fast, modern screen-capture studio for macOS. Grab exactly the pa
 screen you want, annotate it like a pro, record it to a compact video, and pull text out of
 anything — all on-device, with no telemetry and no accounts.
 
-<p align="center">
-  <img src="docs/assets/dashboard.png" alt="Snappilot dashboard" width="49%">
-  <img src="docs/assets/editor.png" alt="Snappilot editor" width="49%">
-</p>
+<table>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/assets/dashboard.png" alt="Snappilot dashboard"><br><br>
+      <b>🏠 Dashboard</b><br>
+      <sub>Colorful quick-capture cards (Region · Window · Full Screen · Grab Text · Record),
+      one row of recording options (system audio · mic · camera · cursor · countdown · quality),
+      and a searchable library of every capture — with copy, favorite &amp; delete.</sub>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/assets/editor.png" alt="Snappilot annotation editor"><br><br>
+      <b>✏️ Annotation editor</b><br>
+      <sub>Snagit-style toolbar (arrow, text, callout, shapes, step, highlight, blur, pen,
+      stamp, crop), a live <b>Quick Styles</b> preset grid, and <b>Tool Properties</b>
+      (color, thickness, opacity, arrow start/end/size) on a clean canvas.</sub>
+    </td>
+  </tr>
+</table>
 
 ## 🚀 Features
 
