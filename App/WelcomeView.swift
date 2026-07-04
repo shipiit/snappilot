@@ -32,29 +32,40 @@ struct WelcomeView: View {
              gradient: [.pink, .orange]),
         Page(symbol: "crop",
              title: "Capture exactly what you want",
-             subtitle: "Grab a region, a single window, or the whole screen.",
+             subtitle: "Region, window, or full screen — with a pixel-perfect magnifier.",
              bullets: [
-                ("crop", "Drag a crosshair to select any region, with live dimensions"),
-                ("macwindow", "Hover to highlight and click a single window"),
-                ("rectangle.inset.filled", "Or capture the full screen in one shot"),
+                ("crop", "Click a card or press ⌃⇧1, then drag a crosshair — a magnifier loupe shows the exact pixels"),
+                ("macwindow", "⌃⇧2 hovers & highlights a single app window — just click it"),
+                ("rectangle.inset.filled", "⌃⇧3 grabs the whole screen (or press F inside the overlay)"),
+                ("timer", "Set a 3s / 5s Delay on the dashboard for timed shots · Esc cancels · M toggles the magnifier"),
              ],
              gradient: [.blue, .indigo]),
         Page(symbol: "pencil.and.outline",
              title: "Annotate like a pro",
-             subtitle: "A full editor opens with every capture.",
+             subtitle: "A Snagit-style editor opens with every capture.",
              bullets: [
-                ("arrow.up.right", "Arrows, lines, rectangles, ellipses & freehand pen"),
-                ("1.circle.fill", "Auto-numbered step badges for tutorials"),
-                ("eye.slash", "Blur / redact sensitive info · highlight · text callouts"),
-                ("arrow.uturn.backward", "Non-destructive — move, edit, undo anything"),
+                ("arrow.up.right", "Arrows, lines, shapes, text, callouts, pen, stamps — top toolbar or press 1–9"),
+                ("paintpalette.fill", "Quick Styles: 10+ one-click presets per tool; tune color, thickness, opacity & arrow ends"),
+                ("1.circle.fill", "Auto-numbered step badges (1·2·3 / A·B·C / a·b·c) and emoji stamps"),
+                ("eye.slash.fill", "Blur, crop, highlight — or hit Redact to auto-blur detected emails & card numbers"),
              ],
              gradient: [.purple, .pink]),
+        Page(symbol: "record.circle.fill",
+             title: "Record your screen",
+             subtitle: "Region or full screen → a compact HEVC video.",
+             bullets: [
+                ("slider.horizontal.3", "Toggle system audio, mic, camera overlay, cursor & countdown before you start"),
+                ("viewfinder", "A Ready-to-Record panel + 3·2·1 countdown; a yellow frame shows what's being captured"),
+                ("wand.and.stars", "Choose Small / Balanced / High quality to trade file size vs. sharpness"),
+                ("photo.stack", "Playback opens inside Snappilot — export, copy, or turn it into a GIF"),
+             ],
+             gradient: [.red, .orange]),
         Page(symbol: "text.viewfinder",
              title: "Grab Text with OCR",
              subtitle: "Turn any picture of text into text you can paste.",
              bullets: [
-                ("doc.on.clipboard.fill", "Select a region → text is copied instantly"),
-                ("cpu", "Powered by Apple Vision, fully offline"),
+                ("doc.on.clipboard.fill", "Press ⌃⇧4, select a region → the text is copied to your clipboard instantly"),
+                ("cpu", "Apple Vision on-device — fully private, works offline"),
                 ("magnifyingglass", "Your captures become searchable by the words inside them"),
              ],
              gradient: [.teal, .green]),
@@ -62,19 +73,20 @@ struct WelcomeView: View {
              title: "Your captures, organized",
              subtitle: "Everything auto-saves to a tidy local library.",
              bullets: [
-                ("folder.fill", "Saved to ~/Pictures/Snappilot, grouped by month"),
-                ("magnifyingglass", "Search past captures — even by their OCR text"),
-                ("clock.arrow.circlepath", "Recent captures live in the menu bar"),
+                ("folder.fill", "Saved to ~/Pictures/Snappilot by month — browse Dashboard, Library, Favorites & Collections"),
+                ("magnifyingglass", "Search past captures, even by their OCR'd text"),
+                ("star.fill", "★ favorite, copy, or move to Trash right from each card"),
+                ("circle.lefthalf.filled", "Full light & dark theme — automatically follows your system"),
              ],
              gradient: [.orange, .yellow]),
         Page(symbol: "keyboard",
              title: "Fast global shortcuts",
-             subtitle: "Fire a capture from any app, anytime.",
+             subtitle: "Fire a capture from any app, anytime — and make them yours.",
              bullets: [
-                ("camera", "⌃⇧1 Region · ⌃⇧2 Window · ⌃⇧3 Full screen"),
-                ("text.viewfinder", "⌃⇧4  Grab text (OCR)"),
-                ("record.circle", "⌃⇧5 Record region · ⌃⇧6 Record screen"),
-                ("stop.circle", "⌃⇧.  Stop recording"),
+                ("camera", "⌃⇧1 Region · ⌃⇧2 Window · ⌃⇧3 Full screen · ⌃⇧4 Grab Text"),
+                ("record.circle", "⌃⇧5 Record region · ⌃⇧6 Record screen · ⌃⇧. Stop"),
+                ("menubar.arrow.up.rectangle", "The menu-bar icon has every action + your recent captures"),
+                ("slider.horizontal.3", "Customize every shortcut in Settings → Shortcuts"),
              ],
              gradient: [.indigo, .blue]),
     ]
@@ -91,7 +103,7 @@ struct WelcomeView: View {
 
             footer
         }
-        .frame(width: 640, height: 560)
+        .frame(width: 660, height: 600)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
