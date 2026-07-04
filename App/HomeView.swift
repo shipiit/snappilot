@@ -173,11 +173,12 @@ struct HomeView: View {
             Spacer()
             HStack(spacing: 8) {
                 Image(systemName: "wand.and.stars").foregroundStyle(.secondary).font(.system(size: 13))
-                Text("Quality").font(.system(size: 13)).foregroundStyle(.primary)
+                Text("Quality").font(.system(size: 13)).foregroundStyle(.primary).lineLimit(1).fixedSize()
                 Picker("", selection: $app.recordQuality) {
                     ForEach(RecordQuality.allCases, id: \.self) { Text($0.title).tag($0) }
-                }.labelsHidden().frame(width: 120).help("Higher quality = larger file")
+                }.labelsHidden().fixedSize().help("Higher quality = larger file")
             }
+            .fixedSize()
         }
         .padding(.horizontal, 20).padding(.vertical, 14)
         .background(Theme.panelBG, in: RoundedRectangle(cornerRadius: 14))
@@ -298,31 +299,35 @@ private struct GalleryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .topTrailing) {
+            ZStack {
+                // A fixed-size box: image fills it and is clipped, so every card is uniform.
                 RoundedRectangle(cornerRadius: 12).fill(Theme.panelBG)
-                if let thumb {
-                    Image(nsImage: thumb).resizable().aspectRatio(contentMode: .fill)
-                        .frame(maxWidth: .infinity).frame(height: 168).clipped()
-                } else {
-                    Image(systemName: record.kind == .video ? "video.fill" : "photo")
-                        .font(.system(size: 30)).foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, minHeight: 168)
-                }
+                    .frame(maxWidth: .infinity).frame(height: 168)
+                    .overlay {
+                        if let thumb {
+                            Image(nsImage: thumb).resizable().aspectRatio(contentMode: .fill)
+                        } else {
+                            Image(systemName: record.kind == .video ? "video.fill" : "photo")
+                                .font(.system(size: 30)).foregroundStyle(.tertiary)
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
                 if record.kind == .video {
                     Image(systemName: "play.circle.fill").font(.system(size: 34))
                         .foregroundStyle(.white, .black.opacity(0.4))
-                        .frame(maxWidth: .infinity, maxHeight: 168)
                 }
                 Button { library.toggleFavorite(id: record.id) } label: {
                     Image(systemName: record.favorite ? "star.fill" : "star")
                         .foregroundStyle(record.favorite ? Color.yellow : .white)
                         .padding(7).background(.black.opacity(0.35), in: Circle())
                 }
-                .buttonStyle(.plain).padding(8)
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing).padding(8)
             }
             .frame(height: 168)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
             .onTapGesture { open() }
 
             Text(record.title).font(.system(size: 13, weight: .medium)).foregroundStyle(.primary).lineLimit(1)
