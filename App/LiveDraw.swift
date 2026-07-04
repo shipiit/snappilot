@@ -55,6 +55,7 @@ final class LiveDrawController: ObservableObject {
 
     func stop() {
         active = false
+        overlays.forEach { $0.teardown() }
         overlayWindows.forEach { $0.orderOut(nil) }
         overlayWindows.removeAll(); overlays.removeAll()
         toolbar?.orderOut(nil); toolbar = nil
@@ -142,7 +143,8 @@ private final class DrawOverlayView: NSView {
         timer = t
     }
     required init?(coder: NSCoder) { fatalError() }
-    deinit { timer?.invalidate() }
+
+    func teardown() { timer?.invalidate(); timer = nil }
 
     override var acceptsFirstResponder: Bool { true }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .crosshair) }
