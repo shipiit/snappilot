@@ -71,6 +71,7 @@ anything — all on-device, with no telemetry and no accounts.
 ### Capture
 - 🟦 **Region** · 🪟 **Window** · 🖥️ **Full Screen** — a crisp crosshair overlay with a
   **live magnifier loupe**, pixel dimensions, and keyboard hints.
+- ⏱️ **Delay timer** — 3s/5s countdown before a screenshot.
 - ⌨️ **Global shortcuts** — trigger any capture from anywhere. Fully **customizable**.
 - 🫥 Snappilot **hides itself** during capture so it never lands in your shot.
 
@@ -78,6 +79,8 @@ anything — all on-device, with no telemetry and no accounts.
 - ➡️ Arrows, lines, rectangles, ellipses, callouts, freehand pen
 - 🔢 **Step badges** — auto-numbered `1·2·3`, `A·B·C`, or `a·b·c`
 - 🖍️ Highlighter · 🙈 **Blur / redact** · ✂️ **Crop** · ⭐ **Stamps** (emoji)
+- 🛡️ **Auto-redact** — one click blurs detected emails & card numbers (on-device OCR)
+- 🖼️ **Polished frames** — wrap a shot in a gradient background + shadow for sharing
 - 🎨 **Quick Styles** — 10+ one-click presets per tool (solid / dashed / dotted, dot & bar
   arrow heads, fills, colors)
 - 🎚️ Tool properties: custom color, thickness, opacity, arrow **start/end/size**

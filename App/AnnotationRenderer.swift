@@ -90,14 +90,9 @@ enum AnnotationRenderer {
         case .step:
             drawStep(a.stepLabel, center: flipY(a.start, h), radius: max(14, lw * 5), color: color)
         case .blur:
-            if transparent {
-                // No live pixels to sample over video — draw a solid redaction block.
-                let r = blRect(start: a.start, end: a.end, imageHeight: h)
-                NSColor.black.withAlphaComponent(0.9).setFill()
-                NSBezierPath(roundedRect: r, xRadius: 4, yRadius: 4).fill()
-            } else {
-                drawBlur(rectTL: selectionRect(from: a.start, to: a.end), imageHeight: h, base: base, ctx: ctx)
-            }
+            // Pixelate the region of the frame. For video this becomes a static blurred
+            // patch baked over the clip — good for hiding a fixed name/logo/field.
+            drawBlur(rectTL: selectionRect(from: a.start, to: a.end), imageHeight: h, base: base, ctx: ctx)
         case .stamp:
             let s = (a.text.isEmpty ? "⭐️" : a.text) as NSString
             let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: max(24, lw * 12))]

@@ -161,12 +161,25 @@ final class AppState: ObservableObject {
         // Show the frame indicator immediately (visible through the countdown + recording).
         if rect != nil { RecordingFrame.shared.show(globalRect: globalRect) }
 
-        if recordCountdown {
-            CountdownOverlay.show(on: screen, regionGlobal: globalRect) { [weak self] in
-                self?.beginRecording(rect: rect, on: screen)
+        Task {
+            // Bring the webcam bubble up NOW (before the countdown) so you can see & position
+            // it — and so permission is sorted before recording starts.
+            if recordCamera {
+                if await AppState.ensureAccess(.video) {
+                    WebcamOverlay.shared.show(in: globalRect)
+                } else {
+                    recordCamera = false
+                    Toast.show("Camera is off — enable it in System Settings › Camera",
+                               symbol: "video.slash.fill")
+                }
             }
-        } else {
-            beginRecording(rect: rect, on: screen)
+            if recordCountdown {
+                CountdownOverlay.show(on: screen, regionGlobal: globalRect) { [weak self] in
+                    self?.beginRecording(rect: rect, on: screen)
+                }
+            } else {
+                beginRecording(rect: rect, on: screen)
+            }
         }
     }
 
@@ -196,20 +209,7 @@ final class AppState: ObservableObject {
                 mic = await AppState.ensureAccess(.audio)
                 if !mic { Toast.show("Microphone off — recording without it", symbol: "mic.slash.fill") }
             }
-            var cam = recordCamera
-            if cam {
-                cam = await AppState.ensureAccess(.video)
-                if !cam { Toast.show("Camera off — recording without webcam", symbol: "video.slash.fill") }
-            }
-
-            if cam {
-                let area: NSRect = rect.map {
-                    NSRect(x: screen.frame.minX + $0.minX, y: screen.frame.minY + $0.minY,
-                           width: $0.width, height: $0.height)
-                } ?? screen.frame
-                WebcamOverlay.shared.show(in: area)
-            }
-
+            // Camera/webcam is already requested & shown in startWithCountdown.
             do {
                 try await rec.start(rectInScreen: rect, on: screen,
                                     systemAudio: recordSystemAudio, micAudio: mic,
