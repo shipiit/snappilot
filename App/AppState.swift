@@ -26,16 +26,17 @@ final class AppState: ObservableObject {
 
     // MARK: Get our own windows out of the shot (like Snagit)
 
-    /// Hide Snappilot's own windows so they aren't captured or in the way.
+    /// Hide ALL of Snappilot's own visible windows (dashboard, editors, video players,
+    /// popovers) so none of them land in the capture or get in the way.
     private func hideOwnWindows() {
         for w in NSApp.windows {
             let cn = String(describing: type(of: w))
-            if cn.contains("Popover") || cn.contains("MenuBarExtra") { w.orderOut(nil) }
-        }
-        // Hide the main dashboard ("Snappilot") — never the editor ("Snappilot — Edit").
-        for w in NSApp.windows where w.isVisible && w.title == "Snappilot" {
-            hiddenWindows.append(w)
-            w.orderOut(nil)
+            if cn.contains("Popover") || cn.contains("MenuBarExtra") { w.orderOut(nil); continue }
+            // Titled content windows = dashboard + any open editor / video preview.
+            if w.isVisible && w.styleMask.contains(.titled) {
+                hiddenWindows.append(w)
+                w.orderOut(nil)
+            }
         }
     }
 

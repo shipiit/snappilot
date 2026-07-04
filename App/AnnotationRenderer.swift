@@ -26,7 +26,8 @@ func hexString(fromNSColor color: NSColor) -> String {
 /// Flattens a base image + annotation layers into a single raster image.
 /// Annotation coordinates are in the base image's **pixel** space, top-left origin.
 enum AnnotationRenderer {
-    private static let ciContext = CIContext()
+    // CIContext is safe to share across threads (Apple docs); opt out of Sendable checking.
+    nonisolated(unsafe) private static let ciContext = CIContext()
 
     static func flatten(base: CGImage, doc: AnnotationDocument) -> CGImage {
         let w = base.width, h = base.height
