@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-dmg:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build Release (unsigned)
+        run: |
+          xcodebuild -project Snappilot.xcodeproj -scheme Snappilot \
+            -configuration Release -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Build DMG
+        run: |
+          APP="build/Build/Products/Release/Snappilot.app"
+          # Ad-hoc sign so the app has a valid (if unnotarized) signature.
+          codesign --force --deep --sign - "$APP"
+          STAGE="$(mktemp -d)/dmg"
+          mkdir -p "$STAGE"
+          cp -R "$APP" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -srcfolder "$STAGE" -volname "Snappilot" -fs HFS+ \
+            -format UDZO -ov "Snappilot.dmg"
+
+      - name: Attach DMG to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" Snappilot.dmg --clobber
