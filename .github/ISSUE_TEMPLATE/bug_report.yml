@@ -1,0 +1,61 @@
+name: 🐛 Bug report
+description: Report something that isn't working right in Snappilot
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting a bug! Please fill in the details below so we can reproduce it.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: When I click Record and stop, …
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Snappilot
+        2. Click …
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / recordings
+      description: Drag images or videos here if helpful.
+    validations:
+      required: false
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. macOS 15.0 (Apple Silicon)
+    validations:
+      required: true
+  - type: input
+    id: appversion
+    attributes:
+      label: Snappilot version
+      placeholder: e.g. 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Crash log / console output
+      description: If the app crashed, paste the relevant crash report (from ~/Library/Logs/DiagnosticReports).
+      render: shell
+    validations:
+      required: false

@@ -16,6 +16,29 @@
   <img alt="Privacy" src="https://img.shields.io/badge/privacy-100%25%20on--device-brightgreen">
 </p>
 
+<p align="center">
+  <a href="https://github.com/shipiit/snappilot/releases/latest/download/Snappilot.dmg">
+    <img alt="Download Snappilot.dmg" src="https://img.shields.io/badge/⬇%20Download-Snappilot.dmg-FF5E7A?style=for-the-badge">
+  </a>
+  &nbsp;
+  <a href="https://github.com/shipiit/snappilot/releases/latest">
+    <img alt="Latest release" src="https://img.shields.io/github/v/release/shipiit/snappilot?style=for-the-badge&color=555">
+  </a>
+</p>
+
+---
+
+## 📥 Download & install
+
+1. **[Download Snappilot.dmg](https://github.com/shipiit/snappilot/releases/latest/download/Snappilot.dmg)** from the latest release.
+2. Open the `.dmg` and **drag Snappilot onto the Applications folder**.
+3. First launch: **right-click Snappilot → Open** (the app is signed but not yet notarized),
+   or run `xattr -cr /Applications/Snappilot.app`.
+4. On first capture/record, allow **Screen Recording** (and Microphone / Camera if used) in
+   **System Settings → Privacy & Security**.
+
+> Prefer to build from source? See [Build & run](#️-build--run) below.
+
 ---
 
 ## ✨ Overview
@@ -104,6 +127,19 @@ through clean value types.
 - Floating recording **control bar** + cursor click-highlight
 - Templates / step-guides · quick share
 
+## 🤝 Contributing
+
+Contributions are welcome! Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** first.
+
+- 🐛 [Report a bug](https://github.com/shipiit/snappilot/issues/new/choose)
+- 💡 [Request a feature](https://github.com/shipiit/snappilot/issues/new/choose)
+- 🔀 `main` is protected — changes land via **pull request** with review.
+
+## 🛡️ Security
+
+Found a vulnerability? Please report it **privately** — see **[SECURITY.md](SECURITY.md)**.
+Do not open a public issue for security problems.
+
 ## 🔒 Privacy
 
 100% on-device. No telemetry, no third-party services, no account. OCR runs locally via
@@ -112,3 +148,4 @@ Apple Vision; recordings and captures never leave your Mac.
 ## 📄 License
 
 MIT.
+
