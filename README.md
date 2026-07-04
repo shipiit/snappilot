@@ -43,9 +43,28 @@
 
 ## ✨ Overview
 
-Snappilot is a fast, modern screen-capture studio for macOS. Grab exactly the part of the
-screen you want, annotate it like a pro, record it to a compact video, and pull text out of
-anything — all on-device, with no telemetry and no accounts.
+Snappilot is a fast, modern **screen-capture studio** for macOS — think Snagit or CleanShot,
+but **free, open-source, and 100% private**. Grab exactly the part of the screen you want,
+annotate it in a Snagit-style editor, record it to a compact HEVC video (with a webcam
+bubble, mic and countdown), and pull selectable text out of anything with on-device OCR.
+Every capture auto-saves to a **searchable local library** — searchable even by the words
+*inside* your screenshots.
+
+### Why Snappilot?
+
+| | |
+|---|---|
+| 🆓 **Free & open source** | No license, no subscription, MIT-licensed. |
+| 🔒 **Private by design** | 100% on-device. No telemetry, no accounts, no cloud. OCR runs locally via Apple Vision. |
+| ⚡ **Native & fast** | Pure Swift + ScreenCaptureKit — lightweight, Retina-crisp, no Electron. |
+| 🎨 **Genuinely powerful** | Magnifier capture, a full annotation editor, screen recording, video trim/annotation, GIF export, auto-redaction, and more. |
+
+### Typical workflow
+
+1. **Capture** — `⌃⇧1` and drag a region (or record with `⌃⇧5`).
+2. **Annotate** — the editor opens; add arrows, callouts, step numbers, blur, stamps.
+3. **Share** — **Copy**, **Save**, drag out, or turn a recording into a **GIF**.
+4. **Find it later** — it's in your library, searchable by its OCR'd text.
 
 <table>
   <tr>
