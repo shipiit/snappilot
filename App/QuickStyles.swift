@@ -107,13 +107,13 @@ struct QuickStylePreview: View {
 
     private func head(_ type: ArrowHead, at p: CGPoint, from other: CGPoint, in ctx: GraphicsContext, color: Color) {
         guard type != .none else { return }
-        let angle = atan2(p.y - other.y, p.x - other.x)
+        let angle = cg_atan2(p.y - other.y, p.x - other.x)
         switch type {
         case .arrow:
             let len: CGFloat = 8, spread = CGFloat.pi / 7
             var path = Path(); path.move(to: p)
-            path.addLine(to: CGPoint(x: p.x - len * cos(angle - spread), y: p.y - len * sin(angle - spread)))
-            path.addLine(to: CGPoint(x: p.x - len * cos(angle + spread), y: p.y - len * sin(angle + spread)))
+            path.addLine(to: CGPoint(x: p.x - len * cg_cos(angle - spread), y: p.y - len * cg_sin(angle - spread)))
+            path.addLine(to: CGPoint(x: p.x - len * cg_cos(angle + spread), y: p.y - len * cg_sin(angle + spread)))
             path.closeSubpath()
             ctx.fill(path, with: .color(color))
         case .dot:
@@ -122,8 +122,8 @@ struct QuickStylePreview: View {
         case .bar:
             let len: CGFloat = 5, perp = angle + .pi / 2
             var path = Path()
-            path.move(to: CGPoint(x: p.x + len * cos(perp), y: p.y + len * sin(perp)))
-            path.addLine(to: CGPoint(x: p.x - len * cos(perp), y: p.y - len * sin(perp)))
+            path.move(to: CGPoint(x: p.x + len * cg_cos(perp), y: p.y + len * cg_sin(perp)))
+            path.addLine(to: CGPoint(x: p.x - len * cg_cos(perp), y: p.y - len * cg_sin(perp)))
             ctx.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
         case .none: break
         }

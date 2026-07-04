@@ -506,14 +506,14 @@ struct EditorView: View {
     private func drawLiveHead(_ type: ArrowHead, at p: CGPoint, from other: CGPoint,
                               width: CGFloat, sizeScale: Double, color: Color, in ctx: GraphicsContext) {
         guard type != .none else { return }
-        let angle = atan2(p.y - other.y, p.x - other.x)
+        let angle = cg_atan2(p.y - other.y, p.x - other.x)
         switch type {
         case .arrow:
             let len = max(10, width * 3.5) * sizeScale, spread = CGFloat.pi / 7
             var path = Path()
             path.move(to: p)
-            path.addLine(to: CGPoint(x: p.x - len * cos(angle - spread), y: p.y - len * sin(angle - spread)))
-            path.addLine(to: CGPoint(x: p.x - len * cos(angle + spread), y: p.y - len * sin(angle + spread)))
+            path.addLine(to: CGPoint(x: p.x - len * cg_cos(angle - spread), y: p.y - len * cg_sin(angle - spread)))
+            path.addLine(to: CGPoint(x: p.x - len * cg_cos(angle + spread), y: p.y - len * cg_sin(angle + spread)))
             path.closeSubpath()
             ctx.fill(path, with: .color(color))
         case .dot:
@@ -522,20 +522,20 @@ struct EditorView: View {
         case .bar:
             let len = max(6, width * 3) * sizeScale, perp = angle + .pi / 2
             var path = Path()
-            path.move(to: CGPoint(x: p.x + len * cos(perp), y: p.y + len * sin(perp)))
-            path.addLine(to: CGPoint(x: p.x - len * cos(perp), y: p.y - len * sin(perp)))
+            path.move(to: CGPoint(x: p.x + len * cg_cos(perp), y: p.y + len * cg_sin(perp)))
+            path.addLine(to: CGPoint(x: p.x - len * cg_cos(perp), y: p.y - len * cg_sin(perp)))
             ctx.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: width, lineCap: .round))
         case .none: break
         }
     }
 
     private func arrowHead(tip: CGPoint, tail: CGPoint, width: CGFloat) -> Path {
-        let angle = atan2(tip.y - tail.y, tip.x - tail.x)
+        let angle = cg_atan2(tip.y - tail.y, tip.x - tail.x)
         let len = max(10, width * 3.5), spread = CGFloat.pi / 7
         var p = Path()
         p.move(to: tip)
-        p.addLine(to: CGPoint(x: tip.x - len * cos(angle - spread), y: tip.y - len * sin(angle - spread)))
-        p.addLine(to: CGPoint(x: tip.x - len * cos(angle + spread), y: tip.y - len * sin(angle + spread)))
+        p.addLine(to: CGPoint(x: tip.x - len * cg_cos(angle - spread), y: tip.y - len * cg_sin(angle - spread)))
+        p.addLine(to: CGPoint(x: tip.x - len * cg_cos(angle + spread), y: tip.y - len * cg_sin(angle + spread)))
         p.closeSubpath()
         return p
     }

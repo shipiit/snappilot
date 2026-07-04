@@ -124,12 +124,12 @@ enum AnnotationRenderer {
                                  width: CGFloat, sizeScale: Double, color: NSColor) {
         guard type != .none else { return }
         color.setFill(); color.setStroke()
-        let angle = atan2(p.y - other.y, p.x - other.x)
+        let angle = cg_atan2(p.y - other.y, p.x - other.x)
         switch type {
         case .arrow:
             let len = max(12, width * 4) * sizeScale, spread = CGFloat.pi / 7
-            let p1 = NSPoint(x: p.x - len * cos(angle - spread), y: p.y - len * sin(angle - spread))
-            let p2 = NSPoint(x: p.x - len * cos(angle + spread), y: p.y - len * sin(angle + spread))
+            let p1 = NSPoint(x: p.x - len * cg_cos(angle - spread), y: p.y - len * cg_sin(angle - spread))
+            let p2 = NSPoint(x: p.x - len * cg_cos(angle + spread), y: p.y - len * cg_sin(angle + spread))
             let path = NSBezierPath()
             path.move(to: p); path.line(to: p1); path.line(to: p2); path.close(); path.fill()
         case .dot:
@@ -137,8 +137,8 @@ enum AnnotationRenderer {
             NSBezierPath(ovalIn: NSRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)).fill()
         case .bar:
             let len = max(6, width * 3) * sizeScale, perp = angle + .pi / 2
-            let a = NSPoint(x: p.x + len * cos(perp), y: p.y + len * sin(perp))
-            let b = NSPoint(x: p.x - len * cos(perp), y: p.y - len * sin(perp))
+            let a = NSPoint(x: p.x + len * cg_cos(perp), y: p.y + len * cg_sin(perp))
+            let b = NSPoint(x: p.x - len * cg_cos(perp), y: p.y - len * cg_sin(perp))
             let path = NSBezierPath(); path.move(to: a); path.line(to: b)
             path.lineWidth = width; path.lineCapStyle = .round; path.stroke()
         case .none: break
