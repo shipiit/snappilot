@@ -362,7 +362,14 @@ private struct GalleryCard: View {
                 .menuStyle(.borderlessButton).frame(width: 22)
             }
         }
-        .task { if record.kind == .image { thumb = NSImage(contentsOf: library.fileURL(for: record)) } }
+        .task {
+            let url = library.fileURL(for: record)
+            if record.kind == .image {
+                thumb = NSImage(contentsOf: url)
+            } else if let cg = await VideoAnnotator.grabFrame(from: url) {
+                thumb = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+            }
+        }
     }
 
     private func iconButton(_ icon: String, _ help: String, _ action: @escaping () -> Void) -> some View {

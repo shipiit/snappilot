@@ -165,12 +165,17 @@ final class AppState: ObservableObject {
             // Bring the webcam bubble up NOW (before the countdown) so you can see & position
             // it — and so permission is sorted before recording starts.
             if recordCamera {
-                if await AppState.ensureAccess(.video) {
+                switch await AppState.access(.video) {
+                case .granted:
                     WebcamOverlay.shared.show(in: globalRect)
-                } else {
+                case .denied:
                     recordCamera = false
-                    Toast.show("Camera is off — enable it in System Settings › Camera",
+                    Toast.show("Camera access is off — opening Settings so you can allow it",
                                symbol: "video.slash.fill")
+                    AppState.openPrivacyPane("Camera")
+                case .noDevice:
+                    recordCamera = false
+                    Toast.show("No camera found", symbol: "video.slash.fill")
                 }
             }
             if recordCountdown {
@@ -205,9 +210,10 @@ final class AppState: ObservableObject {
             // Ask for mic / camera access gracefully — if denied, just drop that feature
             // instead of failing the whole recording.
             var mic = recordMic
-            if mic {
-                mic = await AppState.ensureAccess(.audio)
-                if !mic { Toast.show("Microphone off — recording without it", symbol: "mic.slash.fill") }
+            if mic, await AppState.access(.audio) != .granted {
+                mic = false
+                Toast.show("Microphone off — opening Settings to allow it", symbol: "mic.slash.fill")
+                AppState.openPrivacyPane("Microphone")
             }
             // Camera/webcam is already requested & shown in startWithCountdown.
             do {
@@ -226,12 +232,22 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Returns true if access to the media type is (or becomes) authorized.
-    static func ensureAccess(_ type: AVMediaType) async -> Bool {
+    enum AccessResult { case granted, denied, noDevice }
+
+    /// Check/request camera or mic access; prompts if undetermined.
+    static func access(_ type: AVMediaType) async -> AccessResult {
+        if type == .video, AVCaptureDevice.default(for: .video) == nil { return .noDevice }
         switch AVCaptureDevice.authorizationStatus(for: type) {
-        case .authorized: return true
-        case .notDetermined: return await AVCaptureDevice.requestAccess(for: type)
-        default: return false
+        case .authorized: return .granted
+        case .notDetermined: return await AVCaptureDevice.requestAccess(for: type) ? .granted : .denied
+        default: return .denied
+        }
+    }
+
+    /// Open the given Privacy & Security pane (e.g. "Camera", "Microphone").
+    static func openPrivacyPane(_ pane: String) {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_\(pane)") {
+            NSWorkspace.shared.open(url)
         }
     }
 

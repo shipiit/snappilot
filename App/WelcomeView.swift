@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreGraphics
+import AVFoundation
 
 /// One page of the walkthrough.
 private struct Page: Identifiable {
@@ -146,26 +147,43 @@ struct WelcomeView: View {
                 Text(screenGranted ? "You're all set!" : "One quick permission")
                     .font(.system(size: 28, weight: .bold))
                 Text(screenGranted
-                     ? "Screen Recording is enabled. Take your first capture below."
-                     : "macOS needs your OK to let Snappilot see the screen. Nothing is uploaded — it stays on your Mac.")
+                     ? "Screen Recording is enabled. Grant Camera & Microphone too, or start capturing."
+                     : "Grant these once so you never get interrupted later. Everything stays on your Mac — nothing is uploaded.")
                     .font(.title3).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center).padding(.horizontal, 40)
             }
 
             if !screenGranted {
                 Button {
+                    // Ask for all three up front: Screen Recording, Camera, Microphone.
                     _ = CGRequestScreenCaptureAccess()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    Task {
+                        _ = await AVCaptureDevice.requestAccess(for: .video)
+                        _ = await AVCaptureDevice.requestAccess(for: .audio)
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         screenGranted = CGPreflightScreenCaptureAccess()
                     }
                 } label: {
-                    Label("Enable Screen Recording", systemImage: "lock.open.fill")
+                    Label("Enable all permissions", systemImage: "lock.open.fill")
                         .frame(maxWidth: 300).padding(.vertical, 6)
                 }
                 .controlSize(.large).buttonStyle(.borderedProminent)
-                Text("If macOS opens System Settings, toggle Snappilot on, then return here.")
-                    .font(.caption).foregroundStyle(.tertiary)
+                Text("Grants Screen Recording, Camera & Microphone. If Settings opens, toggle Snappilot on and return.")
+                    .font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center).padding(.horizontal, 30)
             } else {
+                Button {
+                    Task {
+                        _ = await AVCaptureDevice.requestAccess(for: .video)
+                        _ = await AVCaptureDevice.requestAccess(for: .audio)
+                    }
+                } label: {
+                    Label("Also allow Camera & Microphone", systemImage: "camera.fill")
+                        .frame(maxWidth: 300).padding(.vertical, 6)
+                }
+                .controlSize(.large).buttonStyle(.bordered)
+            }
+            if screenGranted {
                 Button {
                     finish(); app.captureRegion()
                 } label: {
