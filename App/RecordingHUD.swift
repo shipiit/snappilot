@@ -16,7 +16,7 @@ final class RecordingHUD {
         self.onStop = onStop
         seconds = 0
 
-        let width: CGFloat = 220, height: CGFloat = 44
+        let width: CGFloat = 300, height: CGFloat = 44
         guard let screen = NSScreen.main else { return }
         let frame = NSRect(x: screen.frame.midX - width / 2, y: screen.frame.maxY - 90,
                            width: width, height: height)
@@ -48,6 +48,12 @@ final class RecordingHUD {
         bg.addSubview(label)
         timeLabel = label
 
+        let draw = NSButton(title: "✎ Draw", target: self, action: #selector(drawTapped))
+        draw.bezelStyle = .rounded
+        draw.frame = NSRect(x: width - 172, y: height/2 - 15, width: 82, height: 30)
+        draw.toolTip = "Draw on screen while recording"
+        bg.addSubview(draw)
+
         let stop = NSButton(title: "Stop", target: self, action: #selector(stopTapped))
         stop.bezelStyle = .rounded
         stop.frame = NSRect(x: width - 84, y: height/2 - 15, width: 70, height: 30)
@@ -73,8 +79,13 @@ final class RecordingHUD {
         onStop?()
     }
 
+    @objc private func drawTapped() {
+        LiveDrawController.shared.toggle()
+    }
+
     func hide() {
         timer?.invalidate(); timer = nil
         window?.orderOut(nil); window = nil
+        LiveDrawController.shared.stop()
     }
 }
