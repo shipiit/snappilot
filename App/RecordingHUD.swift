@@ -11,12 +11,14 @@ final class RecordingHUD {
     private var seconds = 0
     private var timeLabel: NSTextField?
     private var onStop: (() -> Void)?
+    private var onSnapshot: (() -> Void)?
 
-    func show(onStop: @escaping () -> Void) {
+    func show(onStop: @escaping () -> Void, onSnapshot: (() -> Void)? = nil) {
         self.onStop = onStop
+        self.onSnapshot = onSnapshot
         seconds = 0
 
-        let width: CGFloat = 300, height: CGFloat = 44
+        let width: CGFloat = 360, height: CGFloat = 44
         guard let screen = NSScreen.main else { return }
         let frame = NSRect(x: screen.frame.midX - width / 2, y: screen.frame.maxY - 90,
                            width: width, height: height)
@@ -47,6 +49,16 @@ final class RecordingHUD {
         label.frame = NSRect(x: 36, y: height/2 - 11, width: 70, height: 22)
         bg.addSubview(label)
         timeLabel = label
+
+        if onSnapshot != nil {
+            let snap = NSButton(image: NSImage(systemSymbolName: "camera.fill", accessibilityDescription: "Screenshot")!,
+                                target: self, action: #selector(snapshotTapped))
+            snap.bezelStyle = .rounded
+            snap.imagePosition = .imageOnly
+            snap.frame = NSRect(x: width - 262, y: height/2 - 15, width: 40, height: 30)
+            snap.toolTip = "Take a screenshot without stopping the recording"
+            bg.addSubview(snap)
+        }
 
         let draw = NSButton(title: "✎ Draw", target: self, action: #selector(drawTapped))
         draw.bezelStyle = .rounded
@@ -81,6 +93,10 @@ final class RecordingHUD {
 
     @objc private func drawTapped() {
         LiveDrawController.shared.toggle()
+    }
+
+    @objc private func snapshotTapped() {
+        onSnapshot?()
     }
 
     func hide() {

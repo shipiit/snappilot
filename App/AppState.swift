@@ -221,7 +221,9 @@ final class AppState: ObservableObject {
                                     systemAudio: recordSystemAudio, micAudio: mic,
                                     captureCursor: recordCursor, quality: recordQuality)
                 isRecording = true
-                RecordingHUD.shared.show { [weak self] in self?.stopRecording() }
+                RecordingHUD.shared.show(
+                    onStop: { [weak self] in self?.stopRecording() },
+                    onSnapshot: { [weak self] in self?.snapshotDuringRecording(rect: rect, on: screen) })
             } catch {
                 WebcamOverlay.shared.hide()
                 RecordingFrame.shared.hide()
@@ -257,6 +259,20 @@ final class AppState: ObservableObject {
 
     func stopRecording() {
         RecordingController.shared.stop()
+    }
+
+    /// Grab a still of the recorded area without stopping the recording.
+    private func snapshotDuringRecording(rect: CGRect?, on screen: NSScreen) {
+        Task {
+            do {
+                let result: CaptureResult
+                if let rect { result = try await CaptureController.captureRegion(rect, on: screen) }
+                else { result = try await CaptureController.captureFullScreen(at: NSEvent.mouseLocation) }
+                if library.saveImage(result.image) != nil {
+                    Toast.show("Screenshot saved to library", symbol: "camera.fill")
+                }
+            } catch { Toast.show("Screenshot failed", symbol: "exclamationmark.triangle.fill") }
+        }
     }
 
     /// Hotkey-friendly toggles: start if idle, stop if already recording.

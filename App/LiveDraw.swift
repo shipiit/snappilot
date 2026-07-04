@@ -26,6 +26,7 @@ final class LiveDrawController: ObservableObject {
     private var overlays: [DrawOverlayView] = []
     private var overlayWindows: [NSWindow] = []
     private var toolbar: NSWindow?
+    private var keyMonitor: Any?
 
     var color: NSColor { nsColor(fromHex: colorHex) }
 
@@ -51,6 +52,11 @@ final class LiveDrawController: ObservableObject {
         }
         showToolbar()
         broadcast()
+        // Esc exits drawing (in case the toolbar is off-screen on a multi-display setup).
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
+            if e.keyCode == 53 { self?.stop(); return nil }
+            return e
+        }
     }
 
     func stop() {
@@ -59,6 +65,8 @@ final class LiveDrawController: ObservableObject {
         overlayWindows.forEach { $0.orderOut(nil) }
         overlayWindows.removeAll(); overlays.removeAll()
         toolbar?.orderOut(nil); toolbar = nil
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
     }
 
     func clear() { overlays.forEach { $0.clear() } }
@@ -68,8 +76,14 @@ final class LiveDrawController: ObservableObject {
     private func showToolbar() {
         guard let screen = NSScreen.main else { return }
         let w: CGFloat = 470, h: CGFloat = 60
-        let frame = NSRect(x: screen.frame.midX - w / 2, y: screen.frame.minY + 40, width: w, height: h)
-        let win = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+        let frame = NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - 130, width: w, height: h)
+        // A non-activating panel so its buttons work WITHOUT stealing focus from the app
+        // you're recording — a plain borderless window can't become key, so SwiftUI
+        // buttons (like the ✕ exit) wouldn't respond, trapping you in draw mode.
+        let win = KeyablePanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel],
+                               backing: .buffered, defer: false)
+        win.isFloatingPanel = true
+        win.becomesKeyOnlyIfNeeded = true
         win.level = .statusBar
         win.backgroundColor = .clear
         win.isOpaque = false
@@ -80,6 +94,11 @@ final class LiveDrawController: ObservableObject {
         win.orderFrontRegardless()
         toolbar = win
     }
+}
+
+/// A floating panel whose controls can be clicked without activating/stealing focus.
+final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
 }
 
 /// Floating tool picker for live drawing.
