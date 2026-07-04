@@ -201,7 +201,7 @@ struct WelcomeView: View {
     private func hero(_ symbol: String, _ colors: [Color]) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill((colors.first ?? Color.accentColor))
                 .frame(width: 104, height: 104)
                 .shadow(color: (colors.first ?? .accentColor).opacity(0.4), radius: 16, y: 8)
             Image(systemName: symbol).font(.system(size: 46, weight: .semibold)).foregroundStyle(.white)

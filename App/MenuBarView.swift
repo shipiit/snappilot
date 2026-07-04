@@ -37,7 +37,7 @@ struct MenuBarView: View {
     private var header: some View {
         HStack(spacing: 11) {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(LinearGradient(colors: [M("#5661F6"), M("#C850C0")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(M("#5661F6"))
                 .frame(width: 36, height: 36)
                 .overlay(Image(systemName: "camera.viewfinder").foregroundStyle(.white).font(.system(size: 17, weight: .semibold)))
             VStack(alignment: .leading, spacing: 1) {
@@ -69,7 +69,7 @@ struct MenuBarView: View {
                     .background(.white.opacity(0.2), in: Capsule())
             }
             .frame(maxWidth: .infinity).padding(.vertical, 12)
-            .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+            .background((colors.first ?? Color.accentColor),
                         in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
@@ -103,7 +103,7 @@ struct MenuBarView: View {
                 }
             }
             .frame(maxWidth: .infinity).padding(.vertical, 10)
-            .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+            .background((colors.first ?? Color.accentColor),
                         in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)

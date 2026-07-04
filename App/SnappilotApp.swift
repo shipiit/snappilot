@@ -10,7 +10,6 @@ struct SnappilotApp: App {
             HomeView().environmentObject(app)
         }
         .defaultSize(width: 1280, height: 820)
-        .windowStyle(.hiddenTitleBar)
         .commands { menuCommands }
 
         MenuBarExtra("Snappilot", systemImage: "camera.viewfinder") {

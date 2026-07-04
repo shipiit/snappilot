@@ -48,7 +48,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 11) {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(LinearGradient(colors: [C("#5661F6"), C("#C850C0")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(C("#5661F6"))
                     .frame(width: 42, height: 42)
                     .overlay(Image(systemName: "camera.viewfinder").foregroundStyle(.white).font(.system(size: 19, weight: .semibold)))
                 VStack(alignment: .leading, spacing: 1) {
@@ -56,7 +56,7 @@ struct HomeView: View {
                     Text("Capture · Annotate · Record · OCR").font(.system(size: 9)).foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal, 18).padding(.top, 34).padding(.bottom, 22)
+            .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 22)
 
             navItem(.dashboard, badge: nil)
             navItem(.library, badge: library.records.count)
@@ -248,7 +248,7 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity).frame(height: 168)
             .padding(.vertical, 14)
-            .background(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+            .background((colors.first ?? Color.accentColor),
                         in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)

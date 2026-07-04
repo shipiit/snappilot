@@ -18,12 +18,9 @@ enum ImagePolish {
         NSGraphicsContext.current = ns
         let ctx = ns.cgContext
 
-        // Background gradient.
-        let colors = [NSColor(srgbRed: 0.36, green: 0.42, blue: 0.95, alpha: 1).cgColor,
-                      NSColor(srgbRed: 0.62, green: 0.35, blue: 0.90, alpha: 1).cgColor] as CFArray
-        if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
-            ctx.drawLinearGradient(grad, start: CGPoint(x: 0, y: outH), end: CGPoint(x: outW, y: 0), options: [])
-        }
+        // Solid background.
+        ctx.setFillColor(NSColor(srgbRed: 0.34, green: 0.38, blue: 0.62, alpha: 1).cgColor)
+        ctx.fill(CGRect(x: 0, y: 0, width: outW, height: outH))
 
         let rect = CGRect(x: padding, y: padding, width: CGFloat(w), height: CGFloat(h))
         let rounded = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
