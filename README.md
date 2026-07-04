@@ -106,11 +106,14 @@ Every capture auto-saves to a **searchable local library** — searchable even b
 - ↩️ Non-destructive layers, undo/redo, move & edit anything
 
 ### Record
-- 🎥 Record a **region or the full screen** → compact **HEVC MP4**
+- 🎥 Record a **region or the full screen** → compact **HEVC MP4** (Small / Balanced / High quality)
 - 🔊 System audio · 🎙️ Microphone · 📷 **Webcam overlay** · 🖱️ cursor — all optional
-- ⏱️ **"Ready to Record"** panel + **3·2·1 countdown** (outside the frame)
-- 🟨 A live **recording frame** shows exactly what's being captured
-- ▶️ Recordings open in Snappilot's **own player** — never QuickTime
+- ⏱️ **"Ready to Record"** panel + **3·2·1 countdown** (outside the frame) + a live **frame indicator**
+- ✍️ **Draw on screen while recording** — pen, highlighter, a fading **laser pointer** & arrows,
+  captured into the video. Ink **auto-fades** when you stop, Google-Meet style (press `Esc` to exit).
+- 📸 **Screenshot while recording** — grab a still without stopping the recording
+- ▶️ Recordings open in Snappilot's **own player** — never QuickTime — with **Trim**,
+  **Annotate** (draw on a frame, baked over the whole clip), and **GIF export**
 
 ### OCR & Library
 - 🔤 **Grab Text** — extract selectable text from any region via Apple Vision
