@@ -37,7 +37,7 @@ struct MenuBarView: View {
     private var header: some View {
         HStack(spacing: 11) {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(LinearGradient(colors: [M("#FF5E7A"), M("#FF9345")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [M("#5661F6"), M("#C850C0")], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 36, height: 36)
                 .overlay(Image(systemName: "camera.viewfinder").foregroundStyle(.white).font(.system(size: 17, weight: .semibold)))
             VStack(alignment: .leading, spacing: 1) {

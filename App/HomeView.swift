@@ -48,7 +48,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 11) {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(LinearGradient(colors: [C("#FF5E7A"), C("#FF9345")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(LinearGradient(colors: [C("#5661F6"), C("#C850C0")], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 42, height: 42)
                     .overlay(Image(systemName: "camera.viewfinder").foregroundStyle(.white).font(.system(size: 19, weight: .semibold)))
                 VStack(alignment: .leading, spacing: 1) {
