@@ -170,12 +170,14 @@ private final class DrawOverlayView: NSView {
 
     func clear() { strokes.removeAll(); current = nil; needsDisplay = true }
 
+    /// How long a finished stroke lives before it's gone (Google-Meet-style ephemeral ink).
+    private func lifetime(_ t: LiveTool) -> TimeInterval { t == .laser ? 1.2 : 3.5 }
+
     private func tick() {
-        // Drop expired laser strokes; keep redrawing while any are fading.
         let now = Date()
-        let before = strokes.count
-        strokes.removeAll { $0.tool == .laser && now.timeIntervalSince($0.born) > 1.2 }
-        if strokes.contains(where: { $0.tool == .laser }) || strokes.count != before { needsDisplay = true }
+        strokes.removeAll { now.timeIntervalSince($0.born) > lifetime($0.tool) }
+        // Keep animating the fade while any ink is on screen.
+        if !strokes.isEmpty { needsDisplay = true }
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -202,16 +204,19 @@ private final class DrawOverlayView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        for s in strokes { drawStroke(s) }
-        if let c = current { drawStroke(c) }
+        for s in strokes { drawStroke(s, fading: true) }
+        if let c = current { drawStroke(c, fading: false) }   // the in-progress stroke never fades
     }
 
-    private func drawStroke(_ s: LiveStroke) {
+    private func drawStroke(_ s: LiveStroke, fading: Bool) {
         guard s.points.count > 0 else { return }
         var alpha: CGFloat = 1
-        if s.tool == .laser {
+        if fading {
             let age = Date().timeIntervalSince(s.born)
-            alpha = age < 0.6 ? 1 : max(0, 1 - (age - 0.6) / 0.6)
+            let life = lifetime(s.tool)
+            let fadeDur = min(1.0, life * 0.5)      // fade over the last portion of its life
+            let fadeStart = life - fadeDur
+            alpha = age < fadeStart ? 1 : max(0, 1 - (age - fadeStart) / fadeDur)
         }
         let col = s.color.withAlphaComponent(s.tool == .highlighter ? 0.35 * alpha : alpha)
 
