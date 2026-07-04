@@ -14,6 +14,17 @@ check(r == CGRect(x: 20, y: 10, width: 80, height: 70), "selectionRect normalize
 
 let sel = CaptureSelection(rect: CGRect(x: 0, y: 0, width: 100, height: 50), displayID: 1, scale: 2.0)
 check(sel.pixelSize == CGSize(width: 200, height: 100), "pixelSize = points x scale")
+
+// Region crop math: bottom-left points → top-left pixels.
+// rect (20,30,100,50) on a 900pt-tall retina (2x) screen: maxY=80 → topY=820 → ×2.
+let crop = pixelCropRect(selection: CGRect(x: 20, y: 30, width: 100, height: 50),
+                         screenHeightPoints: 900, scale: 2)
+check(crop == CGRect(x: 40, y: 1640, width: 200, height: 100),
+      "pixelCropRect flips Y and scales (got \(crop))")
+// A selection at the very top of the screen maps to y=0 in pixels.
+let topCrop = pixelCropRect(selection: CGRect(x: 0, y: 850, width: 100, height: 50),
+                            screenHeightPoints: 900, scale: 2)
+check(topCrop.minY == 0, "selection at screen top crops from pixel y=0 (got \(topCrop.minY))")
 check(sel.isValid, "non-empty selection is valid")
 check(!CaptureSelection(rect: .zero, displayID: 1, scale: 2).isValid, "zero selection invalid")
 
@@ -43,6 +54,13 @@ doc.remove(id: s1.id)
 check(doc.stepCount == 1, "removal is non-destructive to others")
 doc.update(id: s2.id) { $0.colorHex = "#00FF00" }
 check(doc.items.first(where: { $0.id == s2.id })?.colorHex == "#00FF00", "update mutates in place")
+
+// Step numbering styles
+check(StepStyle.number.label(for: 3) == "3", "numeric step label")
+check(StepStyle.upper.label(for: 1) == "A", "upper letter A")
+check(StepStyle.upper.label(for: 26) == "Z", "upper letter Z")
+check(StepStyle.upper.label(for: 27) == "AA", "upper letter wraps to AA")
+check(StepStyle.lower.label(for: 2) == "b", "lower letter b")
 
 // MARK: OCR (renders text, recognizes it; skips gracefully if Vision unavailable)
 func renderText(_ s: String) -> CGImage? {

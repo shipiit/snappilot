@@ -1,0 +1,35 @@
+name: Snappilot
+options:
+  bundleIdPrefix: ai.snappilot
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  SnapCore:
+    path: .
+
+targets:
+  Snappilot:
+    type: application
+    platform: macOS
+    sources:
+      - App
+    dependencies:
+      - package: SnapCore
+        product: SnapCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: ai.snappilot.mac
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: GHU37F9N5L
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleDisplayName: Snappilot
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Open source — MIT"
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Record your narration into screen recordings."
+        INFOPLIST_KEY_NSCameraUsageDescription: "Show your webcam as an overlay in screen recordings."
+        ENABLE_HARDENED_RUNTIME: YES

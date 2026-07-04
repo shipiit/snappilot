@@ -33,3 +33,20 @@ public func selectionRect(from a: CGPoint, to b: CGPoint) -> CGRect {
            width: abs(a.x - b.x),
            height: abs(a.y - b.y))
 }
+
+/// Convert a selection rect given in a screen's **bottom-left** point space into the
+/// **top-left pixel** rect used to crop a full-display screenshot.
+///
+/// - Parameters:
+///   - rect: selection in screen-local points, bottom-left origin (AppKit view space).
+///   - screenHeightPoints: the screen's height in points.
+///   - scale: the display's backing scale factor (2.0 on Retina).
+public func pixelCropRect(selection rect: CGRect,
+                          screenHeightPoints: CGFloat,
+                          scale: CGFloat) -> CGRect {
+    let topLeftY = screenHeightPoints - rect.maxY
+    return CGRect(x: rect.minX * scale,
+                  y: topLeftY * scale,
+                  width: rect.width * scale,
+                  height: rect.height * scale)
+}

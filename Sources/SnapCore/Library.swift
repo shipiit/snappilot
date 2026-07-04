@@ -17,12 +17,20 @@ public struct CaptureRecord: Codable, Equatable, Sendable, Identifiable {
     public var height: Int
     public var ocrText: String       // recognized text, for search ("" if none)
     public var title: String
+    public var isFavorite: Bool?     // optional so old index files still decode
 
     public init(id: String, kind: CaptureKind, fileName: String, createdAt: Date,
-                width: Int, height: Int, ocrText: String = "", title: String = "") {
+                width: Int, height: Int, ocrText: String = "", title: String = "",
+                isFavorite: Bool? = nil) {
         self.id = id; self.kind = kind; self.fileName = fileName; self.createdAt = createdAt
         self.width = width; self.height = height; self.ocrText = ocrText; self.title = title
+        self.isFavorite = isFavorite
     }
+
+    public var favorite: Bool { isFavorite ?? false }
+
+    /// Uppercased file extension, e.g. "PNG" / "MP4".
+    public var format: String { (fileName as NSString).pathExtension.uppercased() }
 }
 
 public enum CaptureLibrary {

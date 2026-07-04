@@ -1,0 +1,39 @@
+import AppKit
+import SwiftUI
+import CoreGraphics
+
+/// Hosts an `EditorView` in its own window (menu-bar apps have no default window).
+@MainActor
+final class EditorWindowController: NSWindowController, NSWindowDelegate {
+    private let model: EditorModel
+    var onClose: ((EditorWindowController) -> Void)?
+
+    init(image: CGImage, appState: AppState, recordID: String? = nil) {
+        self.model = EditorModel(base: image, appState: appState)
+        self.model.libraryRecordID = recordID
+
+        // Open large — a spacious editing surface like Snagit, clamped to the screen.
+        let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let contentSize = NSSize(width: min(1360, screen.width * 0.92),
+                                 height: min(900, screen.height * 0.9))
+
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: contentSize),
+                              styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                              backing: .buffered, defer: false)
+        window.title = "Snappilot — Edit"
+        window.isReleasedWhenClosed = false
+        window.center()
+
+        super.init(window: window)
+        window.delegate = self
+
+        let root = EditorView(model: model, onDone: { [weak window] in window?.performClose(nil) })
+        window.contentView = NSHostingView(rootView: root.environmentObject(appState))
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func windowWillClose(_ notification: Notification) {
+        onClose?(self)
+    }
+}
