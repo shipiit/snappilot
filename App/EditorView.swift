@@ -59,8 +59,11 @@ struct EditorView: View {
     }
 
     private var topTip: some View {
-        Text("Tip: press 1–9 to switch tools  ·  click Select then drag to move objects")
-            .font(.caption).foregroundStyle(.secondary)
+        Text(model.isVideoMode
+             ? "You're annotating a frame — your drawing is baked over the WHOLE video. Click “Apply to Video” when done."
+             : "Tip: press 1–9 to switch tools  ·  click Select then drag to move objects")
+            .font(.caption)
+            .foregroundStyle(model.isVideoMode ? Color.accentColor : .secondary)
             .frame(maxWidth: .infinity).padding(.vertical, 6)
             .background(.bar)
     }

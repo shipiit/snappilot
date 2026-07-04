@@ -6,15 +6,17 @@ import AppKit
 /// Extracts a frame from a recording to annotate, then bakes the annotation overlay onto
 /// the whole clip and re-encodes it.
 enum VideoAnnotator {
-    /// A representative frame (middle of the clip) to draw on.
-    static func grabFrame(from url: URL) async -> CGImage? {
+    /// A frame to draw on — the given time (current playback position), else the middle.
+    static func grabFrame(from url: URL, at time: CMTime? = nil) async -> CGImage? {
         let asset = AVURLAsset(url: url)
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
         gen.requestedTimeToleranceBefore = .zero
         gen.requestedTimeToleranceAfter = .zero
         let dur = (try? await asset.load(.duration).seconds) ?? 0
-        let t = CMTime(seconds: max(0, dur / 2), preferredTimescale: 600)
+        let t: CMTime
+        if let time, time.isValid, time.seconds > 0 { t = time }
+        else { t = CMTime(seconds: max(0, dur / 2), preferredTimescale: 600) }
         return try? await gen.image(at: t).image
     }
 

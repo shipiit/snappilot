@@ -100,9 +100,11 @@ struct VideoPreviewView: View {
     }
 
     private func annotate() {
-        Toast.show("Loading frame…", symbol: "pencil.tip.crop.circle")
+        pc.pause()
+        let time = pc.player.currentTime()
+        Toast.show("Opening the current frame to annotate…", symbol: "pencil.tip.crop.circle")
         Task {
-            guard let frame = await VideoAnnotator.grabFrame(from: pc.url) else {
+            guard let frame = await VideoAnnotator.grabFrame(from: pc.url, at: time) else {
                 Toast.show("Couldn't read the video", symbol: "exclamationmark.triangle.fill"); return
             }
             EditorWindowController.presentVideoAnnotate(frame: frame, appState: .shared) { overlay in
