@@ -18,7 +18,14 @@ final class AppState: ObservableObject {
     @Published var recordCursor = true
     @Published var recordCountdown = true
     @Published var recordQuality: RecordQuality = .balanced
+    @Published var captureDelay = 0        // seconds before a screenshot (0 = none)
     @Published var isRecording = false
+
+    /// Run a capture after an optional countdown delay (for timed screenshots).
+    private func withCaptureDelay(_ action: @escaping () -> Void) {
+        guard captureDelay > 0, let screen = NSScreen.main ?? NSScreen.screens.first else { action(); return }
+        CountdownOverlay.show(on: screen, from: captureDelay) { action() }
+    }
 
     private var selector: RegionSelector?
     private var editors: [ObjectIdentifier: EditorWindowController] = [:]
@@ -47,9 +54,11 @@ final class AppState: ObservableObject {
 
     // MARK: Capture entry points (called from menu bar + hotkeys)
 
-    func captureRegion() { runRegion { result in self.openEditor(with: result) } }
+    func captureRegion() { withCaptureDelay { self.runRegion { result in self.openEditor(with: result) } } }
 
-    func captureFullScreen() {
+    func captureFullScreen() { withCaptureDelay { self.captureFullScreenNow() } }
+
+    private func captureFullScreenNow() {
         hideOwnWindows()
         Task {
             do {
@@ -63,7 +72,9 @@ final class AppState: ObservableObject {
         }
     }
 
-    func captureWindow() {
+    func captureWindow() { withCaptureDelay { self.captureWindowNow() } }
+
+    private func captureWindowNow() {
         hideOwnWindows()
         selector = RegionSelector()
         selector?.present(mode: .window) { [weak self] outcome in
@@ -87,7 +98,9 @@ final class AppState: ObservableObject {
     }
 
     /// Grab text: select a region, OCR it, copy to clipboard.
-    func grabText() {
+    func grabText() { withCaptureDelay { self.grabTextNow() } }
+
+    private func grabTextNow() {
         runRegion { result in
             Task {
                 defer { self.restoreOwnWindows() }

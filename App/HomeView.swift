@@ -138,7 +138,17 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 26) {
                 header(title: "Dashboard", subtitle: "Capture, annotate and organize your work with ease.")
 
-                sectionTitle("Quick Capture")
+                HStack {
+                    sectionTitle("Quick Capture")
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Image(systemName: "timer").foregroundStyle(.secondary).font(.system(size: 13))
+                        Text("Delay").font(.system(size: 13)).foregroundStyle(.primary)
+                        Picker("", selection: $app.captureDelay) {
+                            Text("Off").tag(0); Text("3s").tag(3); Text("5s").tag(5)
+                        }.labelsHidden().fixedSize().help("Countdown before a screenshot")
+                    }
+                }
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 6), spacing: 14) {
                     captureCard("Region", "Capture a specific area of your screen", "crop", hotkeys.display(.captureRegion), [C("#3B82F6"), C("#2563EB")]) { app.captureRegion() }
                     captureCard("Window", "Capture a specific application window", "macwindow", hotkeys.display(.captureWindow), [C("#22B8CF"), C("#0E8FA8")]) { app.captureWindow() }

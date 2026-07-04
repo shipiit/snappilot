@@ -101,4 +101,27 @@ final class EditorModel: ObservableObject {
     }
 
     func flattened() -> CGImage { AnnotationRenderer.flatten(base: base, doc: doc) }
+
+    /// OCR the image, find emails / card numbers, and blur them out automatically.
+    func autoRedact() {
+        let img = base
+        let langs = appState?.ocrLanguages ?? ["en-US"]
+        Task {
+            guard let boxes = try? await OCR.recognizeBoxes(img, languages: langs) else {
+                Toast.show("Couldn't scan text", symbol: "exclamationmark.triangle.fill"); return
+            }
+            let sensitive = boxes.filter {
+                Redaction.containsEmail($0.text) || Redaction.containsCardNumber($0.text)
+            }
+            guard !sensitive.isEmpty else {
+                Toast.show("No emails or card numbers found", symbol: "checkmark.shield.fill"); return
+            }
+            snapshot()
+            for b in sensitive {
+                let r = b.rect.insetBy(dx: -4, dy: -4)
+                doc.add(.blur, start: CGPoint(x: r.minX, y: r.minY), end: CGPoint(x: r.maxX, y: r.maxY))
+            }
+            Toast.show("Redacted \(sensitive.count) item\(sensitive.count == 1 ? "" : "s")", symbol: "eye.slash.fill")
+        }
+    }
 }

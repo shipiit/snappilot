@@ -91,9 +91,10 @@ enum CountdownOverlay {
 
     /// `regionGlobal` is the recorded area in global bottom-left coords; the countdown is
     /// placed *outside* it so it never covers what's being recorded.
-    static func show(on screen: NSScreen, regionGlobal: NSRect? = nil, completion: @escaping () -> Void) {
+    static func show(on screen: NSScreen, regionGlobal: NSRect? = nil,
+                     from: Int = 3, completion: @escaping () -> Void) {
         done = completion
-        value = 3
+        value = max(1, from)
 
         let win = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
         win.setFrame(screen.frame, display: true)
@@ -123,7 +124,7 @@ enum CountdownOverlay {
         }
         pill.frame = NSRect(x: px, y: py, width: side, height: side)
 
-        let lbl = NSTextField(labelWithString: "3")
+        let lbl = NSTextField(labelWithString: "\(value)")
         lbl.font = .monospacedDigitSystemFont(ofSize: 60, weight: .bold)
         lbl.textColor = .white
         lbl.alignment = .center

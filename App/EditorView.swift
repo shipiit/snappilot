@@ -98,6 +98,8 @@ struct EditorView: View {
                 }
             }
             Spacer(minLength: 8)
+            Button { model.autoRedact() } label: { Label("Redact", systemImage: "eye.slash") }
+                .help("Auto-blur detected emails & card numbers")
             Button { grabText() } label: { Label("Grab Text", systemImage: "text.viewfinder") }
             Button { copy() } label: { Label("Copy", systemImage: "doc.on.doc") }
             Button { save() } label: { Label("Save", systemImage: "square.and.arrow.down") }
