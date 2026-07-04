@@ -1,4 +1,4 @@
-import ScreenCaptureKit
+@preconcurrency import ScreenCaptureKit
 import CoreGraphics
 import AppKit
 import SnapCore

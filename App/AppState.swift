@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import ScreenCaptureKit
+@preconcurrency import ScreenCaptureKit
 import AVFoundation
 import SnapCore
 

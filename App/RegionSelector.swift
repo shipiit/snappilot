@@ -1,5 +1,5 @@
 import AppKit
-import ScreenCaptureKit
+@preconcurrency import ScreenCaptureKit
 import SnapCore
 
 /// What the overlay produced.
