@@ -5,3 +5,4 @@ DerivedData/
 *.xcworkspace
 .DS_Store
 docs/superpowers/
+dist/
