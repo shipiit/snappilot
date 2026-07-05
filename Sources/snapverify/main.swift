@@ -173,5 +173,12 @@ check(overdue.isOverdue, "past-due unfinished task is overdue")
 overdue = TaskBoard.move(overdue, to: .done)
 check(!overdue.isOverdue, "done task is never overdue")
 
+// MARK: Notes
+check(NoteText.wordCount("hello world  foo\nbar") == 4, "word count splits on whitespace/newlines")
+check(NoteText.inferTitle("# My Title\nbody") == "My Title", "infers title from first heading")
+check(NoteText.excerpt("# Heading\n\nThe **body** text here.").contains("body text here"), "excerpt strips markdown & heading")
+let note = Note(title: "T", body: String(repeating: "word ", count: 400))
+check(note.readingMinutes == 2, "reading time ~200wpm (got \(note.readingMinutes))")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

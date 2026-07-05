@@ -4,7 +4,7 @@ import SnapCore
 private func C(_ hex: String) -> Color { Color(nsColor: nsColor(fromHex: hex)) }
 
 enum HomeSection: String, CaseIterable, Identifiable {
-    case dashboard, library, favorites, collections, tasks
+    case dashboard, library, favorites, collections, tasks, notes
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -13,6 +13,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .favorites: return "Favorites"
         case .collections: return "Collections"
         case .tasks: return "Tasks"
+        case .notes: return "Notes"
         }
     }
     var icon: String {
@@ -22,6 +23,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .favorites: return "star"
         case .collections: return "folder"
         case .tasks: return "checklist"
+        case .notes: return "note.text"
         }
     }
 }
@@ -70,6 +72,7 @@ struct HomeView: View {
             navItem(.favorites, badge: library.favorites.isEmpty ? nil : library.favorites.count)
             navItem(.collections, badge: library.collections.isEmpty ? nil : library.collections.count)
             navItem(.tasks, badge: openTaskCount == 0 ? nil : openTaskCount)
+            navItem(.notes, badge: library.notes.isEmpty ? nil : library.notes.count)
 
             Divider().padding(.vertical, 8).padding(.horizontal, 14)
 
@@ -131,6 +134,7 @@ struct HomeView: View {
             case .favorites: gallerySection(title: "Favorites", records: filtered(library.favorites))
             case .collections: collectionsView
             case .tasks: tasksView
+            case .notes: NotesView(library: library)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

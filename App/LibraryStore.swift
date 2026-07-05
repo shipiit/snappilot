@@ -11,11 +11,13 @@ final class LibraryStore: ObservableObject {
     @Published private(set) var records: [CaptureRecord] = []
     @Published private(set) var collections: [Collection] = []
     @Published private(set) var tasks: [TaskItem] = []
+    @Published private(set) var notes: [Note] = []
 
     let root: URL
     private var indexURL: URL { root.appendingPathComponent("index.json") }
     private var collectionsURL: URL { root.appendingPathComponent("collections.json") }
     private var tasksURL: URL { root.appendingPathComponent("tasks.json") }
+    private var notesURL: URL { root.appendingPathComponent("notes.json") }
 
     init(root: URL = CaptureLibrary.defaultRoot()) {
         self.root = root
@@ -35,6 +37,10 @@ final class LibraryStore: ObservableObject {
         if let data = try? Data(contentsOf: tasksURL),
            let decoded = try? JSONDecoder.snap.decode([TaskItem].self, from: data) {
             tasks = decoded
+        }
+        if let data = try? Data(contentsOf: notesURL),
+           let decoded = try? JSONDecoder.snap.decode([Note].self, from: data) {
+            notes = decoded
         }
     }
 
@@ -162,6 +168,53 @@ final class LibraryStore: ObservableObject {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }
         mutate(id) { $0.comments = ($0.comments ?? []) + [TaskComment(author: author, text: t)] }
+    }
+
+    // MARK: Notes
+
+    private func persistNotes() {
+        guard let data = try? JSONEncoder.snap.encode(notes) else { return }
+        try? data.write(to: notesURL, options: .atomic)
+    }
+
+    @discardableResult
+    func createNote(title: String = "", body: String = "", folder: String? = nil) -> Note {
+        let note = Note(title: title, body: body, folder: folder)
+        notes.insert(note, at: 0)
+        persistNotes()
+        return note
+    }
+
+    /// Update a note's editable fields (title/body/folder/tags) and bump its timestamp.
+    func updateNote(id: String, title: String? = nil, body: String? = nil, folder: String? = nil, tags: [String]? = nil) {
+        guard let idx = notes.firstIndex(where: { $0.id == id }) else { return }
+        if let title { notes[idx].title = title }
+        if let body { notes[idx].body = body }
+        if let folder { notes[idx].folder = folder }
+        if let tags { notes[idx].tags = tags }
+        notes[idx].updatedAt = Date()
+        persistNotes()
+    }
+
+    func deleteNote(id: String) { notes.removeAll { $0.id == id }; persistNotes() }
+
+    func toggleNoteFavorite(id: String) { mutateNote(id) { $0.isFavorite.toggle() } }
+    func toggleNotePinned(id: String) { mutateNote(id) { $0.isPinned.toggle() } }
+    func toggleNoteArchived(id: String) { mutateNote(id) { $0.isArchived.toggle() } }
+
+    @discardableResult
+    func duplicateNote(id: String) -> Note? {
+        guard let n = notes.first(where: { $0.id == id }) else { return nil }
+        return createNote(title: n.title.isEmpty ? "" : "\(n.title) copy", body: n.body, folder: n.folder)
+    }
+
+    private func mutateNote(_ id: String, _ block: (inout Note) -> Void) {
+        guard let idx = notes.firstIndex(where: { $0.id == id }) else { return }
+        block(&notes[idx]); notes[idx].updatedAt = Date(); persistNotes()
+    }
+
+    var noteFolders: [String] {
+        Array(Set(notes.compactMap { $0.folder }.filter { !$0.isEmpty })).sorted { $0.lowercased() < $1.lowercased() }
     }
 
     func updateTask(_ task: TaskItem) {
