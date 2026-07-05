@@ -153,14 +153,17 @@ struct HomeView: View {
                         }.labelsHidden().fixedSize().help("Countdown before a screenshot")
                     }
                 }
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 6), spacing: 14) {
-                    captureCard("Region", "Capture a specific area of your screen", "crop", hotkeys.display(.captureRegion), [C("#3B82F6"), C("#2563EB")]) { app.captureRegion() }
-                    captureCard("Window", "Capture a specific application window", "macwindow", hotkeys.display(.captureWindow), [C("#22B8CF"), C("#0E8FA8")]) { app.captureWindow() }
-                    captureCard("Full Screen", "Capture your entire screen", "display", hotkeys.display(.captureFull), [C("#8B5CF6"), C("#6D28D9")]) { app.captureFullScreen() }
-                    captureCard("Grab Text (OCR)", "Extract text from any area", "text.viewfinder", hotkeys.display(.grabText), [C("#22C55E"), C("#16A34A")]) { app.grabText() }
-                    captureCard("Record Region", "Record a specific area", "record.circle", hotkeys.display(.recordRegion), [C("#F97316"), C("#EF4444")]) { app.toggleRecordRegion() }
-                    captureCard("Record Screen", "Record your entire screen", "rectangle.badge.record", hotkeys.display(.recordScreen), [C("#EC4899"), C("#DB2777")]) { app.toggleRecordScreen() }
-                    captureCard("Record Meeting", "Record a call, then auto-transcribe & get tasks", "person.2.wave.2.fill", app.generatingNotes ? "Working…" : "AI", [C("#6366F1"), C("#4F46E5")]) { app.recordMeeting() }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        captureCard("Region", "Capture a specific area of your screen", "crop", hotkeys.display(.captureRegion), [C("#3B82F6"), C("#2563EB")]) { app.captureRegion() }
+                        captureCard("Window", "Capture a specific application window", "macwindow", hotkeys.display(.captureWindow), [C("#22B8CF"), C("#0E8FA8")]) { app.captureWindow() }
+                        captureCard("Full Screen", "Capture your entire screen", "display", hotkeys.display(.captureFull), [C("#8B5CF6"), C("#6D28D9")]) { app.captureFullScreen() }
+                        captureCard("Grab Text (OCR)", "Extract text from any area", "text.viewfinder", hotkeys.display(.grabText), [C("#22C55E"), C("#16A34A")]) { app.grabText() }
+                        captureCard("Record Region", "Record a specific area", "record.circle", hotkeys.display(.recordRegion), [C("#F97316"), C("#EF4444")]) { app.toggleRecordRegion() }
+                        captureCard("Record Screen", "Record your entire screen", "rectangle.badge.record", hotkeys.display(.recordScreen), [C("#EC4899"), C("#DB2777")]) { app.toggleRecordScreen() }
+                        captureCard("Record Meeting", "Record a call, then auto-transcribe & get tasks", "person.2.wave.2.fill", app.generatingNotes ? "Working…" : "AI", [C("#6366F1"), C("#4F46E5")]) { app.recordMeeting() }
+                    }
+                    .padding(.horizontal, 1).padding(.bottom, 6)
                 }
 
                 recordingBar
@@ -295,19 +298,19 @@ struct HomeView: View {
     private func captureCard(_ title: String, _ desc: String, _ icon: String, _ shortcut: String,
                              _ colors: [Color], _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
+                Text(shortcut).font(.system(size: 10, weight: .bold, design: .rounded)).foregroundStyle(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(.white.opacity(0.18), in: Capsule())
                 Image(systemName: icon).font(.system(size: 24, weight: .semibold)).foregroundStyle(.white)
                     .frame(height: 30)
                 Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 Text(desc).font(.system(size: 10)).foregroundStyle(.white.opacity(0.85))
                     .multilineTextAlignment(.center).lineLimit(3).fixedSize(horizontal: false, vertical: true)
-                Text(shortcut).font(.system(size: 10, weight: .bold, design: .rounded)).foregroundStyle(.white)
-                    .padding(.horizontal, 8).padding(.vertical, 2)
-                    .background(.white.opacity(0.18), in: Capsule())
             }
-            .frame(maxWidth: .infinity).frame(height: 168)
-            .padding(.vertical, 14)
+            .frame(width: 150, height: 172)
+            .padding(.vertical, 12)
             .background((colors.first ?? Color.accentColor),
                         in: RoundedRectangle(cornerRadius: 16))
         }

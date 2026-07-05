@@ -85,9 +85,24 @@ struct MenuBarView: View {
                     .background(M("#EF4444"), in: RoundedRectangle(cornerRadius: 12))
             }.buttonStyle(.plain)
         } else {
-            HStack(spacing: 8) {
-                recordCard("Record Region", "record.circle", hotkeys.display(.recordRegion), [M("#F97316"), M("#EF4444")]) { app.recordRegion() }
-                recordCard("Record Screen", "rectangle.badge.record", hotkeys.display(.recordScreen), [M("#EC4899"), M("#DB2777")]) { app.recordScreen() }
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    recordCard("Record Region", "record.circle", hotkeys.display(.recordRegion), [M("#F97316"), M("#EF4444")]) { app.recordRegion() }
+                    recordCard("Record Screen", "rectangle.badge.record", hotkeys.display(.recordScreen), [M("#EC4899"), M("#DB2777")]) { app.recordScreen() }
+                }
+                Button { app.recordMeeting() } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "person.2.wave.2.fill").font(.system(size: 13)).foregroundStyle(.white)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Record Meeting").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                            Text(app.generatingNotes ? "Transcribing…" : "Transcribe & get tasks")
+                                .font(.system(size: 8.5, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.85))
+                        }
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 10).padding(.horizontal, 10)
+                    .background(M("#4F46E5"), in: RoundedRectangle(cornerRadius: 12))
+                }.buttonStyle(.plain)
             }
         }
     }
