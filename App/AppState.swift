@@ -342,10 +342,15 @@ final class AppState: ObservableObject {
                 let sidecar = url.deletingPathExtension().appendingPathExtension("md")
                 try? doc.markdown().write(to: sidecar, atomically: true, encoding: .utf8)
                 generatingNotes = false
+                let speakerCount = Set(lines.map { $0.speaker }).count
                 if lines.isEmpty {
                     Toast.show("No speech recognized in this recording", symbol: "waveform.slash")
+                } else if usingCaptions {
+                    Toast.show("Meeting notes ready — named \(speakerCount) speaker\(speakerCount == 1 ? "" : "s") from Meet captions",
+                               symbol: "captions.bubble.fill")
                 } else {
-                    Toast.show("Meeting notes ready", symbol: "person.2.wave.2.fill")
+                    Toast.show("Meeting notes ready (You / Participants — no Meet captions found)",
+                               symbol: "person.2.wave.2.fill")
                 }
                 MeetingNotesWindowController.present(doc)
             } catch {

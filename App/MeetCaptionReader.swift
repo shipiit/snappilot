@@ -22,14 +22,29 @@ final class MeetCaptionReader {
 
     var hasCaptions: Bool { !committed.isEmpty || !pending.isEmpty }
 
+    /// Chromium-based browsers (and Safari) that can run Google Meet, in priority order.
+    private static let browserBundleIDs = [
+        "com.google.Chrome", "com.google.Chrome.beta", "com.google.Chrome.canary",
+        "com.microsoft.edgemac", "com.brave.Browser", "company.thebrowser.Browser",
+        "com.vivaldi.Vivaldi", "com.operasoftware.Opera", "com.apple.Safari",
+    ]
+
+    private static func meetBrowser() -> NSRunningApplication? {
+        for id in browserBundleIDs {
+            if let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first {
+                return app
+            }
+        }
+        return nil
+    }
+
     static func supported() -> Bool {
-        AXIsProcessTrusted() && NSRunningApplication
-            .runningApplications(withBundleIdentifier: "com.google.Chrome").first != nil
+        AXIsProcessTrusted() && meetBrowser() != nil
     }
 
     func start() {
         guard timer == nil else { return }
-        startTime = Date(); committed = []; pending = [:]
+        startTime = Date(); committed = []; pending = [:]; announced = false
         let t = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
@@ -47,17 +62,22 @@ final class MeetCaptionReader {
     // MARK: Polling
 
     private func poll() {
-        guard let chrome = NSRunningApplication
-            .runningApplications(withBundleIdentifier: "com.google.Chrome").first else { return }
-        let app = AXUIElementCreateApplication(chrome.processIdentifier)
+        guard let browser = Self.meetBrowser() else { return }
+        let app = AXUIElementCreateApplication(browser.processIdentifier)
         guard let captions = findCaptionsContainer(app, depth: 0) else { return }
         var texts: [String] = []
         collectStaticText(captions, into: &texts, depth: 0)
         ingest(pairs(from: texts))
     }
 
+    private var announced = false
+
     /// Fold newly-read (name, text) pairs into the pending/committed timeline.
     private func ingest(_ newPairs: [(name: String, text: String)]) {
+        if !announced, !newPairs.isEmpty {
+            announced = true
+            Toast.show("Reading Meet captions ✓ — names will be in your notes", symbol: "captions.bubble.fill")
+        }
         let now = Date().timeIntervalSince(startTime)
         for pair in newPairs {
             let name = pair.name
