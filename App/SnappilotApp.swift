@@ -22,30 +22,39 @@ struct SnappilotApp: App {
         }
     }
 
-    /// Full app menu bar. No `keyboardShortcut` here — the global Carbon hotkeys already
-    /// own those keys, so adding them to menus too would fire captures twice.
+    /// Full app menu bar. Each item shows its shortcut in the title (the global Carbon
+    /// hotkeys already own those keys, so we don't attach a real `keyboardShortcut` too —
+    /// that would fire captures twice — but the user can still see every shortcut here).
     @CommandsBuilder private var menuCommands: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("Capture Region") { app.captureRegion() }
-            Button("Capture Window") { app.captureWindow() }
-            Button("Capture Full Screen") { app.captureFullScreen() }
-            Button("Grab Text (OCR)") { app.grabText() }
+            Button(item("Capture Region", .captureRegion)) { app.captureRegion() }
+            Button(item("Capture Window", .captureWindow)) { app.captureWindow() }
+            Button(item("Capture Full Screen", .captureFull)) { app.captureFullScreen() }
+            Button(item("Grab Text (OCR)", .grabText)) { app.grabText() }
         }
         CommandMenu("Capture") {
-            Button("Capture Region") { app.captureRegion() }
-            Button("Capture Window") { app.captureWindow() }
-            Button("Capture Full Screen") { app.captureFullScreen() }
-            Button("Grab Text (OCR)") { app.grabText() }
+            Button(item("Capture Region", .captureRegion)) { app.captureRegion() }
+            Button(item("Capture Window", .captureWindow)) { app.captureWindow() }
+            Button(item("Capture Full Screen", .captureFull)) { app.captureFullScreen() }
+            Button(item("Grab Text (OCR)", .grabText)) { app.grabText() }
+            Button(item("Scrolling Capture", .scrollingCapture)) { app.scrollingCapture() }
             Divider()
-            Button("Record Region") { app.toggleRecordRegion() }
-            Button("Record Screen") { app.toggleRecordScreen() }
-            Button("Stop Recording") { app.stopRecording() }.disabled(!app.isRecording)
+            Button(item("Record Region", .recordRegion)) { app.toggleRecordRegion() }
+            Button(item("Record Screen", .recordScreen)) { app.toggleRecordScreen() }
+            Button(item("Record Meeting", .recordMeeting)) { app.recordMeeting() }
+            Button(item("Stop Recording", .stopRecording)) { app.stopRecording() }.disabled(!app.isRecording)
             Divider()
+            Button("Customize Shortcuts…") { NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) }
             Button("Open Library Folder") { app.openLibraryFolder() }
         }
         CommandGroup(replacing: .help) {
             Button("Snappilot Guide") { WelcomeWindowController.present(app: app) }
         }
+    }
+
+    /// "Title    ⌃⇧1" — action label with its current shortcut appended.
+    private func item(_ title: String, _ action: HotkeyAction) -> String {
+        "\(title)    \(HotkeyStore.shared.display(action))"
     }
 }
 
