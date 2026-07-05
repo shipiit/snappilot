@@ -22,8 +22,11 @@ final class HotkeyManager {
         case .captureWindow: return { DispatchQueue.main.async { AppState.shared.captureWindow() } }
         case .captureFull:   return { DispatchQueue.main.async { AppState.shared.captureFullScreen() } }
         case .grabText:      return { DispatchQueue.main.async { AppState.shared.grabText() } }
+        case .scrollingCapture: return { DispatchQueue.main.async { AppState.shared.scrollingCapture() } }
         case .recordRegion:  return { DispatchQueue.main.async { AppState.shared.toggleRecordRegion() } }
         case .recordScreen:  return { DispatchQueue.main.async { AppState.shared.toggleRecordScreen() } }
+        case .recordMeeting: return { DispatchQueue.main.async {
+            if AppState.shared.isRecording { AppState.shared.stopRecording() } else { AppState.shared.recordMeeting() } } }
         case .stopRecording: return { DispatchQueue.main.async {
             if AppState.shared.isRecording { AppState.shared.stopRecording() } } }
         }

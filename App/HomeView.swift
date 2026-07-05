@@ -38,7 +38,6 @@ struct HomeView: View {
     @State private var showPDFSheet = false
     @State private var pdfSelection: Set<String> = []
     @State private var openCollection: String?
-    @State private var doneTasks: Set<String> = []
 
     var body: some View {
         HStack(spacing: 0) {
@@ -165,7 +164,7 @@ struct HomeView: View {
                         captureCard("Window", "Capture a specific application window", "macwindow", hotkeys.display(.captureWindow), [C("#22B8CF"), C("#0E8FA8")]) { app.captureWindow() }
                         captureCard("Full Screen", "Capture your entire screen", "display", hotkeys.display(.captureFull), [C("#8B5CF6"), C("#6D28D9")]) { app.captureFullScreen() }
                         captureCard("Grab Text (OCR)", "Extract text from any area", "text.viewfinder", hotkeys.display(.grabText), [C("#22C55E"), C("#16A34A")]) { app.grabText() }
-                        captureCard("Scrolling Capture", "Capture a long page into one tall image", "arrow.down.doc", "", [C("#0EA5E9"), C("#0284C7")]) { app.scrollingCapture() }
+                        captureCard("Scrolling Capture", "Capture a long page into one tall image", "arrow.down.doc", hotkeys.display(.scrollingCapture), [C("#0EA5E9"), C("#0284C7")]) { app.scrollingCapture() }
                         captureCard("Record Region", "Record a specific area", "record.circle", hotkeys.display(.recordRegion), [C("#F97316"), C("#EF4444")]) { app.toggleRecordRegion() }
                         captureCard("Record Screen", "Record your entire screen", "rectangle.badge.record", hotkeys.display(.recordScreen), [C("#EC4899"), C("#DB2777")]) { app.toggleRecordScreen() }
                         captureCard("Record Meeting", "Record a call, then auto-transcribe & get tasks", "person.2.wave.2.fill", app.generatingNotes ? "Working…" : "AI", [C("#6366F1"), C("#4F46E5")]) { app.recordMeeting() }
@@ -352,124 +351,11 @@ struct HomeView: View {
         }
     }
 
-    // MARK: Tasks (aggregated across all meeting notes)
+    // MARK: Tasks (Kanban board)
 
-    /// Every meeting recording that has saved notes, newest first.
-    private var meetingNotes: [(record: CaptureRecord, doc: MeetingDoc)] {
-        library.records
-            .filter { $0.kind == .video && library.hasNotes($0) }
-            .compactMap { r in library.loadNotes(for: r).map { (r, $0) } }
-    }
+    private var openTaskCount: Int { library.tasks.filter { $0.status != .done }.count }
 
-    private var openTaskCount: Int {
-        meetingNotes.reduce(0) { sum, item in
-            sum + item.doc.notes.tasks.filter { !doneTasks.contains(taskKey(item.record.id, $0)) }.count
-        }
-    }
-
-    private func taskKey(_ recordID: String, _ task: MeetingNotes.Task) -> String { "\(recordID)|\(task.id)" }
-
-    /// All tasks as a Markdown checklist, grouped by meeting.
-    private func tasksMarkdown() -> String {
-        var md = "# Meeting Tasks\n"
-        for item in meetingNotes where !item.doc.notes.tasks.isEmpty {
-            md += "\n## \(item.doc.title) — \(item.doc.date.formatted(date: .abbreviated, time: .shortened))\n"
-            for task in item.doc.notes.tasks {
-                let done = doneTasks.contains(taskKey(item.record.id, task))
-                md += "- [\(done ? "x" : " ")] **\(task.owner):** \(task.text)\n"
-            }
-        }
-        return md
-    }
-
-    private func copyTasks() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(tasksMarkdown(), forType: .string)
-        Toast.show("Tasks copied as a checklist", symbol: "checkmark")
-    }
-
-    private func exportTasks() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = "Meeting-Tasks.md"
-        panel.allowedContentTypes = [.plainText]
-        if panel.runModal() == .OK, let url = panel.url {
-            try? tasksMarkdown().write(to: url, atomically: true, encoding: .utf8)
-            Toast.show("Tasks exported", symbol: "square.and.arrow.up")
-        }
-    }
-
-    /// Add every not-yet-done task to Apple Reminders.
-    private func addTasksToReminders() {
-        let open = meetingNotes.flatMap { item in
-            item.doc.notes.tasks
-                .filter { !doneTasks.contains(taskKey(item.record.id, $0)) }
-                .map { "\($0.owner): \($0.text)" }
-        }
-        guard !open.isEmpty else { Toast.show("No open tasks to add", symbol: "checklist"); return }
-        TaskExporter.addToReminders(open)
-    }
-
-    private var tasksView: some View {
-        let meetings = meetingNotes.filter { !$0.doc.notes.tasks.isEmpty }
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack {
-                    header(title: "Tasks", subtitle: "Action items gathered from all your meetings.")
-                    Spacer()
-                    if !meetings.isEmpty {
-                        Button { copyTasks() } label: { Label("Copy", systemImage: "doc.on.doc") }
-                            .buttonStyle(.bordered)
-                        Button { exportTasks() } label: { Label("Export", systemImage: "square.and.arrow.up") }
-                            .buttonStyle(.bordered)
-                        Button { addTasksToReminders() } label: { Label("Reminders", systemImage: "checklist") }
-                            .buttonStyle(.borderedProminent)
-                    }
-                }
-                if meetings.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "checklist").font(.system(size: 44)).foregroundStyle(.tertiary)
-                        Text("No tasks yet").foregroundStyle(.secondary)
-                        Text("Record a meeting with “Record Meeting” — action items show up here automatically.")
-                            .font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center).frame(maxWidth: 360)
-                    }.frame(maxWidth: .infinity).padding(.vertical, 50)
-                } else {
-                    ForEach(meetings, id: \.record.id) { item in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Button { app.openMeetingNotes(for: item.record) } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "person.2.wave.2.fill").font(.caption)
-                                    Text(item.doc.title).font(.headline)
-                                    Text(item.doc.date.formatted(date: .abbreviated, time: .shortened))
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                            }.buttonStyle(.plain)
-                            ForEach(item.doc.notes.tasks) { task in
-                                let key = taskKey(item.record.id, task)
-                                HStack(alignment: .top, spacing: 10) {
-                                    Image(systemName: doneTasks.contains(key) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(doneTasks.contains(key) ? Color.accentColor : .secondary)
-                                        .onTapGesture {
-                                            if doneTasks.contains(key) { doneTasks.remove(key) } else { doneTasks.insert(key) }
-                                        }
-                                    Text(task.text)
-                                        .strikethrough(doneTasks.contains(key))
-                                        .foregroundStyle(doneTasks.contains(key) ? .secondary : .primary)
-                                    Spacer()
-                                    Text(task.owner).font(.caption2).foregroundStyle(.secondary)
-                                        .padding(.horizontal, 7).padding(.vertical, 2)
-                                        .background(Theme.chipBG, in: Capsule())
-                                }
-                            }
-                        }
-                        .padding(14)
-                        .background(Theme.cardBG, in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke, lineWidth: 1))
-                    }
-                }
-            }
-            .padding(28)
-        }
-    }
+    private var tasksView: some View { KanbanView(library: library) }
 
     @ViewBuilder private var collectionsView: some View {
         if let id = openCollection, let coll = library.collections.first(where: { $0.id == id }) {

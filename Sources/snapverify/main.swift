@@ -160,5 +160,18 @@ if let source = grad(40, 250) {
     }
 }
 
+// MARK: Kanban task board
+var task = TaskItem(title: "Ship release", status: .todo)
+check(task.history.isEmpty, "new task has no history")
+task = TaskBoard.move(task, to: .inProgress)
+check(task.status == .inProgress, "move changes status")
+check(task.history.count == 1 && task.history[0].text.contains("In Progress"), "move logs history")
+let unchanged = TaskBoard.move(task, to: .inProgress)
+check(unchanged.history.count == 1, "moving to same status is a no-op")
+var overdue = TaskItem(title: "Late", status: .todo, due: Date(timeIntervalSince1970: 0))
+check(overdue.isOverdue, "past-due unfinished task is overdue")
+overdue = TaskBoard.move(overdue, to: .done)
+check(!overdue.isOverdue, "done task is never overdue")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -3,8 +3,8 @@ import Carbon.HIToolbox
 
 /// Every globally-triggerable action.
 enum HotkeyAction: String, CaseIterable, Identifiable, Codable {
-    case captureRegion, captureWindow, captureFull, grabText
-    case recordRegion, recordScreen, stopRecording
+    case captureRegion, captureWindow, captureFull, grabText, scrollingCapture
+    case recordRegion, recordScreen, recordMeeting, stopRecording
 
     var id: String { rawValue }
     var title: String {
@@ -13,8 +13,10 @@ enum HotkeyAction: String, CaseIterable, Identifiable, Codable {
         case .captureWindow: return "Capture Window"
         case .captureFull: return "Capture Full Screen"
         case .grabText: return "Grab Text (OCR)"
+        case .scrollingCapture: return "Scrolling Capture"
         case .recordRegion: return "Record Region"
         case .recordScreen: return "Record Screen"
+        case .recordMeeting: return "Record Meeting"
         case .stopRecording: return "Stop Recording"
         }
     }
@@ -24,8 +26,10 @@ enum HotkeyAction: String, CaseIterable, Identifiable, Codable {
         case .captureWindow: return "macwindow"
         case .captureFull: return "rectangle.inset.filled"
         case .grabText: return "text.viewfinder"
+        case .scrollingCapture: return "arrow.down.doc"
         case .recordRegion: return "record.circle"
         case .recordScreen: return "rectangle.badge.record"
+        case .recordMeeting: return "person.2.wave.2.fill"
         case .stopRecording: return "stop.circle"
         }
     }
@@ -70,13 +74,15 @@ final class HotkeyStore: ObservableObject {
             HotkeyBinding(keyCode: UInt32(code), carbonModifiers: ctrlShift, display: disp)
         }
         return [
-            .captureRegion: b(kVK_ANSI_1, "⌃⇧1"),
-            .captureWindow: b(kVK_ANSI_2, "⌃⇧2"),
-            .captureFull:   b(kVK_ANSI_3, "⌃⇧3"),
-            .grabText:      b(kVK_ANSI_4, "⌃⇧4"),
-            .recordRegion:  b(kVK_ANSI_5, "⌃⇧5"),
-            .recordScreen:  b(kVK_ANSI_6, "⌃⇧6"),
-            .stopRecording: b(kVK_ANSI_Period, "⌃⇧."),
+            .captureRegion:    b(kVK_ANSI_1, "⌃⇧1"),
+            .captureWindow:    b(kVK_ANSI_2, "⌃⇧2"),
+            .captureFull:      b(kVK_ANSI_3, "⌃⇧3"),
+            .grabText:         b(kVK_ANSI_4, "⌃⇧4"),
+            .recordRegion:     b(kVK_ANSI_5, "⌃⇧5"),
+            .recordScreen:     b(kVK_ANSI_6, "⌃⇧6"),
+            .scrollingCapture: b(kVK_ANSI_7, "⌃⇧7"),
+            .recordMeeting:    b(kVK_ANSI_8, "⌃⇧8"),
+            .stopRecording:    b(kVK_ANSI_Period, "⌃⇧."),
         ]
     }()
 
