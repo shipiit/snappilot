@@ -224,6 +224,10 @@ struct HomeView: View {
             Text("Recording Options").font(.headline)
             popoverToggle("System audio", "speaker.wave.2.fill", $app.recordSystemAudio)
             popoverToggle("Microphone", "mic.fill", $app.recordMic)
+            if app.recordMic {
+                popoverToggle("Noise cancellation", "waveform.badge.mic", $app.recordNoiseCancellation)
+                    .padding(.leading, 18)
+            }
             popoverToggle("Camera overlay", "web.camera.fill", $app.recordCamera)
             popoverToggle("Show cursor", "cursorarrow", $app.recordCursor)
             popoverToggle("Cursor highlight & clicks", "cursorarrow.rays", $app.recordCursorHighlight)

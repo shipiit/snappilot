@@ -41,6 +41,7 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
     private var videoInput: AVAssetWriterInput?
     private var audioInput: AVAssetWriterInput?
     private var micInput: AVAssetWriterInput?
+    private var voiceMic: VoiceMic?
     private let queue = DispatchQueue(label: "ai.snappilot.recording")
     private var started = false
     private var finishing = false
@@ -61,6 +62,7 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
     @MainActor
     func start(rectInScreen: CGRect?, on screen: NSScreen,
                systemAudio: Bool, micAudio: Bool, captureCursor: Bool = true,
+               noiseCancellation: Bool = true,
                quality: RecordQuality = .balanced) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         let displayID = CaptureController.screenNumber(screen)
@@ -68,9 +70,15 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
                 ?? content.displays.first else { throw CaptureError.noDisplay }
         let scale = screen.backingScaleFactor
 
-        // Microphone capture needs macOS 15+.
-        var micEnabled = false
-        if micAudio, #available(macOS 15.0, *) { micEnabled = true }
+        // Two mic paths: the voice-processed engine (noise cancellation, macOS 13+) or
+        // ScreenCaptureKit's raw microphone (macOS 15+). Never both.
+        var useVoiceMic = false          // noise-cancelled mic via AVAudioEngine
+        var useSCMic = false             // raw mic via SCStream
+        if micAudio {
+            if noiseCancellation { useVoiceMic = true }
+            else if #available(macOS 15.0, *) { useSCMic = true }
+        }
+        let micTrackWanted = useVoiceMic || useSCMic
 
         let pixelScale = quality.pixelScale(screenScale: scale)
         videoFPS = quality.fps
@@ -82,7 +90,7 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
         config.showsCursor = captureCursor
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.capturesAudio = systemAudio
-        if micEnabled, #available(macOS 15.0, *) { config.captureMicrophone = true }
+        if useSCMic, #available(macOS 15.0, *) { config.captureMicrophone = true }
 
         if let rect = rectInScreen {
             // SCStream sourceRect is top-left points relative to the display.
@@ -100,18 +108,37 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
         let area = Double(config.width * config.height)
         videoBitrate = max(2_500_000, min(40_000_000, Int(area * Double(videoFPS) * quality.bitsPerPixel)))
 
-        try setupWriter(systemAudio: systemAudio, micAudio: micEnabled)
+        try setupWriter(systemAudio: systemAudio, micAudio: micTrackWanted)
 
         let stream = SCStream(filter: filter, configuration: config, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
         if systemAudio {
             try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: queue)
         }
-        if micEnabled, #available(macOS 15.0, *) {
+        if useSCMic, #available(macOS 15.0, *) {
             try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: queue)
         }
         self.stream = stream
         try await stream.startCapture()
+
+        // Voice-processed mic feeds the same writer input on our serial queue.
+        if useVoiceMic {
+            let mic = VoiceMic()
+            do {
+                try mic.start { [weak self] sb in
+                    guard let self else { return }
+                    self.queue.async {
+                        guard self.started, !self.paused, !self.finishing,
+                              let input = self.micInput, input.isReadyForMoreMediaData else { return }
+                        input.append(self.shiftedByPause(sb) ?? sb)
+                    }
+                }
+                voiceMic = mic
+            } catch {
+                // Non-fatal: keep recording without the mic track.
+                voiceMic = nil
+            }
+        }
         isRecording = true
     }
 
@@ -211,6 +238,7 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
             self.finishing = true
             self.paused = false
             self.isRecording = false
+            self.voiceMic?.stop()
             let stream = self.stream
             // Stop the stream first, then finalize the writer on our serial queue so it
             // never races with an in-flight sample append (which would crash).
@@ -249,6 +277,7 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
     }
 
     private func reset() {
+        voiceMic?.stop(); voiceMic = nil
         stream = nil; writer = nil; videoInput = nil; audioInput = nil; micInput = nil
         started = false; finishing = false; paused = false
         pauseStart = .invalid; pausedOffset = .zero; outputURL = nil

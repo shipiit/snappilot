@@ -14,6 +14,7 @@ final class AppState: ObservableObject {
     @Published var ocrLanguages: [String] = ["en-US"]
     @Published var recordSystemAudio = true
     @Published var recordMic = false
+    @Published var recordNoiseCancellation = true
     @Published var recordCamera = false
     @Published var recordCursor = true
     @Published var recordCursorHighlight = false
@@ -227,7 +228,9 @@ final class AppState: ObservableObject {
             do {
                 try await rec.start(rectInScreen: rect, on: screen,
                                     systemAudio: recordSystemAudio, micAudio: mic,
-                                    captureCursor: recordCursor, quality: recordQuality)
+                                    captureCursor: recordCursor,
+                                    noiseCancellation: recordNoiseCancellation,
+                                    quality: recordQuality)
                 isRecording = true
                 if recordCursorHighlight { CursorHighlight.shared.start() }
                 isPaused = false
