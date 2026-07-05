@@ -62,6 +62,7 @@ struct SnappilotApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)   // show in the Dock like a normal app
+        AppState.shared.applyAppearance()
         HotkeyManager.shared.reload()
         TaskNotifier.requestAuthorization()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.maximizeMainWindow() }

@@ -228,8 +228,15 @@ final class LibraryStore: ObservableObject {
         var total: Int64 { screenshots + videos + attachments + notes + tasks }
     }
 
-    /// How much disk each part of the app is using (bytes).
+    private var cachedStorage: StorageUsage?
+    private var storageComputedAt: Date?
+
+    /// How much disk each part of the app is using (bytes). Cached for a few seconds so it
+    /// isn't rescanned on every sidebar redraw.
     func storageUsage() -> StorageUsage {
+        if let cached = cachedStorage, let at = storageComputedAt, Date().timeIntervalSince(at) < 8 {
+            return cached
+        }
         var u = StorageUsage()
         for r in records {
             let size = fileSize(fileURL(for: r))
@@ -239,6 +246,7 @@ final class LibraryStore: ObservableObject {
         u.notes = fileSize(notesURL) + fileSize(root.appendingPathComponent("index.json"))
         u.tasks = fileSize(tasksURL) + fileSize(collectionsURL)
         // Meeting-notes sidecars (.notes.json / .md) count toward notes too.
+        cachedStorage = u; storageComputedAt = Date()
         return u
     }
 

@@ -124,6 +124,7 @@ struct NotesView: View {
     @State private var draftBody = ""
     @State private var mode: NoteMode = .split
     @State private var showInfo = false
+    @State private var saveWork: DispatchWorkItem?
 
     private var selectedNote: Note? { library.notes.first { $0.id == selectedID } }
 
@@ -243,9 +244,15 @@ struct NotesView: View {
         if let note = selectedNote { draftTitle = note.title; draftBody = note.body }
         else { draftTitle = ""; draftBody = "" }
     }
+    /// Debounced save — waits ~0.6s after the last keystroke so we don't rewrite the file
+    /// on every character.
     private func persist() {
         guard let note = selectedNote, note.title != draftTitle || note.body != draftBody else { return }
-        library.updateNote(id: note.id, title: draftTitle, body: draftBody)
+        saveWork?.cancel()
+        let id = note.id, title = draftTitle, body = draftBody
+        let work = DispatchWorkItem { library.updateNote(id: id, title: title, body: body) }
+        saveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: work)
     }
     private func insertImage(_ note: Note) {
         let panel = NSOpenPanel(); panel.allowedContentTypes = [.image]

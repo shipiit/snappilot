@@ -16,6 +16,11 @@ struct SettingsView: View {
 
     private var general: some View {
         Form {
+            LabeledContent("Appearance") {
+                Picker("", selection: $app.appearance) {
+                    ForEach(AppearanceMode.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                }.labelsHidden().pickerStyle(.segmented).frame(width: 220)
+            }
             LabeledContent("Library folder") {
                 HStack {
                     Text(app.library.root.path).font(.caption).foregroundStyle(.secondary)
@@ -41,10 +46,11 @@ struct SettingsView: View {
             Form {
                 Section("Capture") {
                     shortcutRow(.captureRegion); shortcutRow(.captureWindow)
-                    shortcutRow(.captureFull); shortcutRow(.grabText)
+                    shortcutRow(.captureFull); shortcutRow(.grabText); shortcutRow(.scrollingCapture)
                 }
                 Section("Record") {
-                    shortcutRow(.recordRegion); shortcutRow(.recordScreen); shortcutRow(.stopRecording)
+                    shortcutRow(.recordRegion); shortcutRow(.recordScreen)
+                    shortcutRow(.recordMeeting); shortcutRow(.stopRecording)
                 }
             }
             .formStyle(.grouped)

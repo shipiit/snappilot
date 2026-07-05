@@ -5,6 +5,13 @@ import AVFoundation
 import SnapCore
 
 /// Coordinates capture → editor → library. Owned by the app; injected into views.
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+    var title: String { self == .system ? "System" : self == .light ? "Light" : "Dark" }
+    var symbol: String { self == .system ? "circle.lefthalf.filled" : self == .light ? "sun.max" : "moon" }
+}
+
 @MainActor
 final class AppState: ObservableObject {
     static let shared = AppState()
@@ -25,6 +32,22 @@ final class AppState: ObservableObject {
     @Published var isPaused = false
     @Published var generatingNotes = false
     @Published var selectedNoteID: String?
+    @Published var appearance: AppearanceMode =
+        AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "") ?? .system {
+        didSet {
+            UserDefaults.standard.set(appearance.rawValue, forKey: "appearanceMode")
+            applyAppearance()
+        }
+    }
+
+    /// Force the app's light/dark appearance, or follow the system.
+    func applyAppearance() {
+        switch appearance {
+        case .system: NSApp.appearance = nil
+        case .light:  NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:   NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
 
     // Meeting Mode: when set, notes are generated from the recording once it stops.
     private var meetingMode = false
