@@ -33,6 +33,8 @@ struct HomeView: View {
     @State private var section: HomeSection = .dashboard
     @State private var query = ""
     @State private var showRecOptions = false
+    @State private var showPDFSheet = false
+    @State private var pdfSelection: Set<String> = []
 
     var body: some View {
         HStack(spacing: 0) {
@@ -42,6 +44,7 @@ struct HomeView: View {
         }
         .frame(minWidth: 980, minHeight: 640)
         .background(Theme.appBG)
+        .sheet(isPresented: $showPDFSheet) { pdfSheet }
     }
 
     // MARK: Sidebar
@@ -165,8 +168,8 @@ struct HomeView: View {
                     sectionTitle("Recent Captures")
                     Spacer()
                     searchField.frame(width: 280)
-                    Button { exportPDF() } label: { Label("PDF", systemImage: "doc.richtext") }
-                        .buttonStyle(.bordered).controlSize(.large).help("Export images to a PDF")
+                    Button { openPDFPicker() } label: { Label("PDF", systemImage: "doc.richtext") }
+                        .buttonStyle(.bordered).controlSize(.large).help("Pick images and export a PDF")
                     Button { newFolder() } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                         .buttonStyle(.bordered).controlSize(.large)
                 }
@@ -352,20 +355,97 @@ struct HomeView: View {
         NSWorkspace.shared.open(url)
     }
 
-    /// Export the images currently in view into a single multi-page PDF.
-    private func exportPDF() {
-        let images = filtered(library.records).filter { $0.kind == .image }.map { library.fileURL(for: $0) }
-        guard !images.isEmpty else { Toast.show("No images to export", symbol: "doc.richtext"); return }
+    private var pdfImages: [CaptureRecord] { library.records.filter { $0.kind == .image } }
+
+    private func openPDFPicker() {
+        guard !pdfImages.isEmpty else { Toast.show("No images to export", symbol: "doc.richtext"); return }
+        pdfSelection = Set(pdfImages.map { $0.id })   // preselect all
+        showPDFSheet = true
+    }
+
+    /// A sheet to pick exactly which images go into the PDF.
+    private var pdfSheet: some View {
+        let imgs = pdfImages
+        return VStack(spacing: 0) {
+            HStack {
+                Text("Select images for PDF").font(.headline)
+                Spacer()
+                Button(pdfSelection.count == imgs.count ? "Deselect All" : "Select All") {
+                    pdfSelection = pdfSelection.count == imgs.count ? [] : Set(imgs.map { $0.id })
+                }
+            }
+            .padding()
+            Divider()
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 12)], spacing: 12) {
+                    ForEach(imgs) { rec in
+                        PDFPickCell(record: rec, library: library, selected: pdfSelection.contains(rec.id)) {
+                            if pdfSelection.contains(rec.id) { pdfSelection.remove(rec.id) }
+                            else { pdfSelection.insert(rec.id) }
+                        }
+                    }
+                }
+                .padding()
+            }
+            Divider()
+            HStack {
+                Text("\(pdfSelection.count) of \(imgs.count) selected").foregroundStyle(.secondary)
+                Spacer()
+                Button("Cancel") { showPDFSheet = false }.keyboardShortcut(.cancelAction)
+                Button("Export PDF") { exportSelectedPDF() }
+                    .buttonStyle(.borderedProminent).disabled(pdfSelection.isEmpty).keyboardShortcut(.defaultAction)
+            }
+            .padding()
+        }
+        .frame(width: 640, height: 540)
+    }
+
+    private func exportSelectedPDF() {
+        // Preserve library order (newest first) for the chosen images.
+        let urls = pdfImages.filter { pdfSelection.contains($0.id) }.map { library.fileURL(for: $0) }
+        showPDFSheet = false
+        guard !urls.isEmpty else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = "Snappilot.pdf"
         guard panel.runModal() == .OK, let dest = panel.url else { return }
-        if PDFExporter.export(imageURLs: images, to: dest) {
-            Toast.show("PDF exported · \(images.count) page\(images.count == 1 ? "" : "s")", symbol: "doc.richtext")
+        if PDFExporter.export(imageURLs: urls, to: dest) {
+            Toast.show("PDF exported · \(urls.count) page\(urls.count == 1 ? "" : "s")", symbol: "doc.richtext")
             NSWorkspace.shared.activateFileViewerSelecting([dest])
         } else {
             Toast.show("PDF export failed", symbol: "exclamationmark.triangle.fill")
         }
+    }
+}
+
+/// A selectable image thumbnail for the PDF picker.
+private struct PDFPickCell: View {
+    let record: CaptureRecord
+    let library: LibraryStore
+    let selected: Bool
+    let toggle: () -> Void
+    @State private var thumb: NSImage?
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 8).fill(Theme.panelBG)
+                    .frame(height: 110)
+                    .overlay {
+                        if let thumb { Image(nsImage: thumb).resizable().aspectRatio(contentMode: .fill) }
+                        else { Image(systemName: "photo").foregroundStyle(.tertiary) }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? Color.accentColor : .white, .black.opacity(0.4))
+                    .font(.system(size: 20)).padding(6)
+            }
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.accentColor : Theme.stroke, lineWidth: selected ? 2 : 1))
+            Text(record.title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { toggle() }
+        .task { thumb = NSImage(contentsOf: library.fileURL(for: record)) }
     }
 }
 
