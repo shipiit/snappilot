@@ -199,9 +199,11 @@ struct NotesView: View {
     }
 
     private var sourceEditor: some View {
-        TextEditor(text: $draftBody)
-            .font(.system(.body, design: .monospaced))
-            .padding(14).scrollContentBackground(.hidden).background(Theme.appBG)
+        CodeTextView(text: $draftBody, onPasteImage: { image in
+            guard let rel = library.saveAttachment(image: image) else { return nil }
+            return "\n![pasted-image|480](\(library.attachmentURL(rel).absoluteString))\n"
+        })
+            .background(Theme.appBG)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                 for p in providers {
