@@ -160,6 +160,7 @@ struct HomeView: View {
                     captureCard("Grab Text (OCR)", "Extract text from any area", "text.viewfinder", hotkeys.display(.grabText), [C("#22C55E"), C("#16A34A")]) { app.grabText() }
                     captureCard("Record Region", "Record a specific area", "record.circle", hotkeys.display(.recordRegion), [C("#F97316"), C("#EF4444")]) { app.toggleRecordRegion() }
                     captureCard("Record Screen", "Record your entire screen", "rectangle.badge.record", hotkeys.display(.recordScreen), [C("#EC4899"), C("#DB2777")]) { app.toggleRecordScreen() }
+                    captureCard("Record Meeting", "Record a call, then auto-transcribe & get tasks", "person.2.wave.2.fill", app.generatingNotes ? "Working…" : "AI", [C("#6366F1"), C("#4F46E5")]) { app.recordMeeting() }
                 }
 
                 recordingBar
@@ -471,6 +472,7 @@ private struct PDFPickCell: View {
 private struct GalleryCard: View {
     let record: CaptureRecord
     @ObservedObject var library: LibraryStore
+    @EnvironmentObject var app: AppState
     @State private var thumb: NSImage?
 
     var body: some View {
@@ -530,6 +532,12 @@ private struct GalleryCard: View {
                     if record.kind == .image {
                         Button("Copy Image") { copyImage() }
                         Button("Pin to Screen") { PinBoard.pin(url: library.fileURL(for: record)) }
+                    }
+                    if record.kind == .video {
+                        Button("Meeting Notes (AI)") {
+                            app.generateNotesForExisting(url: library.fileURL(for: record),
+                                                         title: record.title, date: record.createdAt)
+                        }
                     }
                     Button(record.favorite ? "Remove from Favorites" : "Add to Favorites") { library.toggleFavorite(id: record.id) }
                     Button("Add Tag…") { if let t = promptForTag() { library.addTag(t, to: record.id) } }

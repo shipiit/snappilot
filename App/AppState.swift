@@ -23,6 +23,12 @@ final class AppState: ObservableObject {
     @Published var captureDelay = 0        // seconds before a screenshot (0 = none)
     @Published var isRecording = false
     @Published var isPaused = false
+    @Published var generatingNotes = false
+
+    // Meeting Mode: when set, notes are generated from the recording once it stops.
+    private var meetingMode = false
+    private var lastHadParticipants = false
+    private var lastHadYou = false
 
     func togglePause() {
         if isPaused { RecordingController.shared.resume(); isPaused = false }
@@ -144,6 +150,16 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Record a Google Meet / Zoom meeting: force system audio + mic (with noise
+    /// cancellation) so both sides are captured, then auto-generate notes when it stops.
+    func recordMeeting() {
+        recordSystemAudio = true
+        recordMic = true
+        recordNoiseCancellation = true
+        meetingMode = true
+        recordScreen()
+    }
+
     /// Record the whole screen under the pointer.
     func recordScreen() {
         hideOwnWindows()
@@ -207,9 +223,19 @@ final class AppState: ObservableObject {
             CursorHighlight.shared.stop()
             self.restoreOwnWindows()
             guard let url else { Toast.show("Recording failed", symbol: "exclamationmark.triangle.fill"); return }
+            let wasMeeting = self.meetingMode
+            self.meetingMode = false
             if let saved = self.library.saveVideo(from: url, width: saved_w, height: saved_h) {
                 Toast.show("Recording saved", symbol: "video.fill")
-                VideoPreviewWindowController.present(url: self.library.fileURL(for: saved), title: saved.title)
+                let fileURL = self.library.fileURL(for: saved)
+                if wasMeeting {
+                    self.generateMeetingNotes(url: fileURL, title: saved.title,
+                                              date: saved.createdAt,
+                                              hasParticipants: self.lastHadParticipants,
+                                              hasYou: self.lastHadYou)
+                } else {
+                    VideoPreviewWindowController.present(url: fileURL, title: saved.title)
+                }
             } else {
                 Toast.show("Couldn't save recording", symbol: "exclamationmark.triangle.fill")
             }
@@ -232,6 +258,8 @@ final class AppState: ObservableObject {
                                     noiseCancellation: recordNoiseCancellation,
                                     quality: recordQuality)
                 isRecording = true
+                lastHadParticipants = recordSystemAudio
+                lastHadYou = mic
                 if recordCursorHighlight { CursorHighlight.shared.start() }
                 isPaused = false
                 RecordingHUD.shared.show(
@@ -274,6 +302,44 @@ final class AppState: ObservableObject {
     func stopRecording() {
         isPaused = false
         RecordingController.shared.stop()
+    }
+
+    /// Transcribe a meeting recording on-device and build notes (summary, tasks, key points),
+    /// then show them and save a Markdown copy next to the recording.
+    func generateMeetingNotes(url: URL, title: String, date: Date,
+                              hasParticipants: Bool, hasYou: Bool) {
+        guard !generatingNotes else { return }
+        generatingNotes = true
+        Toast.show("Transcribing meeting on-device…", symbol: "waveform")
+        Task {
+            do {
+                let lines = try await MeetingTranscriber.transcribe(
+                    url: url, hasParticipants: hasParticipants, hasYou: hasYou,
+                    progress: { msg in Task { @MainActor in Toast.show(msg, symbol: "waveform") } })
+                let notes = MeetingAnalyzer.analyze(lines)
+                let doc = MeetingDoc(title: title, date: date, notes: notes,
+                                     lines: lines, recordingURL: url)
+                // Save a sidecar .md next to the recording.
+                let sidecar = url.deletingPathExtension().appendingPathExtension("md")
+                try? doc.markdown().write(to: sidecar, atomically: true, encoding: .utf8)
+                generatingNotes = false
+                if lines.isEmpty {
+                    Toast.show("No speech recognized in this recording", symbol: "waveform.slash")
+                } else {
+                    Toast.show("Meeting notes ready", symbol: "person.2.wave.2.fill")
+                }
+                MeetingNotesWindowController.present(doc)
+            } catch {
+                generatingNotes = false
+                Toast.show(error.localizedDescription, symbol: "exclamationmark.triangle.fill")
+            }
+        }
+    }
+
+    /// Generate notes for an existing recording already in the library.
+    func generateNotesForExisting(url: URL, title: String, date: Date) {
+        generateMeetingNotes(url: url, title: title, date: date,
+                             hasParticipants: true, hasYou: true)
     }
 
     /// Grab a still of the recorded area without stopping the recording.

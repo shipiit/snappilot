@@ -109,5 +109,27 @@ if let img = renderText("HELLO") {
     print("skip - could not render OCR fixture")
 }
 
+// MARK: Meeting analysis
+let meetingLines = [
+    TranscriptLine(speaker: "You", text: "Thanks everyone for joining. Let's ship the release on Friday.", start: 1),
+    TranscriptLine(speaker: "Participants", text: "Sounds good. I'll handle the QA testing before then.", start: 5),
+    TranscriptLine(speaker: "Participants", text: "We agreed the deadline is Friday at 5pm.", start: 9),
+    TranscriptLine(speaker: "You", text: "Can you also write the release notes?", start: 13),
+    TranscriptLine(speaker: "Participants", text: "Yeah.", start: 16),   // fragment, should be dropped
+]
+let notes = MeetingAnalyzer.analyze(meetingLines)
+check(notes.tasks.contains { $0.text.lowercased().contains("qa testing") },
+      "extracts 'I'll handle QA' as a task")
+check(notes.tasks.contains { $0.owner == "Participants" && $0.text.lowercased().contains("qa") },
+      "owner of 'I'll handle QA' is the speaker (Participants)")
+check(notes.tasks.contains { $0.text.lowercased().contains("release notes") && $0.owner == "Participants" },
+      "'can you write release notes' delegates to Participants")
+check(notes.keyPoints.contains { $0.lowercased().contains("deadline is friday") },
+      "extracts the deadline as a key point")
+check(!notes.summary.isEmpty, "summary is non-empty")
+check(!notes.tasks.contains { $0.text.lowercased() == "yeah." },
+      "one-word fragments are not tasks")
+check(MeetingAnalyzer.splitSentences("One. Two! Three?").count == 3, "splits three sentences")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
