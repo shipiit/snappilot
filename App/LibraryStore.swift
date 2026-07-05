@@ -100,6 +100,27 @@ final class LibraryStore: ObservableObject {
         persistIndex()
     }
 
+    func addTag(_ tag: String, to id: String) {
+        let t = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, let idx = records.firstIndex(where: { $0.id == id }) else { return }
+        var tags = records[idx].tags ?? []
+        guard !tags.contains(where: { $0.caseInsensitiveCompare(t) == .orderedSame }) else { return }
+        tags.append(t)
+        records[idx].tags = tags
+        persistIndex()
+    }
+
+    func removeTag(_ tag: String, from id: String) {
+        guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
+        records[idx].tags?.removeAll { $0 == tag }
+        persistIndex()
+    }
+
+    /// All distinct tags across the library, sorted.
+    var allTags: [String] {
+        Array(Set(records.flatMap { $0.tagList })).sorted { $0.lowercased() < $1.lowercased() }
+    }
+
     /// Move a capture's file to the Trash and drop it from the index.
     func moveToTrash(_ record: CaptureRecord) {
         try? FileManager.default.trashItem(at: fileURL(for: record), resultingItemURL: nil)

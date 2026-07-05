@@ -163,7 +163,9 @@ struct HomeView: View {
                 HStack {
                     sectionTitle("Recent Captures")
                     Spacer()
-                    searchField.frame(width: 300)
+                    searchField.frame(width: 280)
+                    Button { exportPDF() } label: { Label("PDF", systemImage: "doc.richtext") }
+                        .buttonStyle(.bordered).controlSize(.large).help("Export images to a PDF")
                     Button { newFolder() } label: { Label("New Folder", systemImage: "folder.badge.plus") }
                         .buttonStyle(.bordered).controlSize(.large)
                 }
@@ -299,6 +301,36 @@ struct HomeView: View {
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         NSWorkspace.shared.open(url)
     }
+
+    /// Export the images currently in view into a single multi-page PDF.
+    private func exportPDF() {
+        let images = filtered(library.records).filter { $0.kind == .image }.map { library.fileURL(for: $0) }
+        guard !images.isEmpty else { Toast.show("No images to export", symbol: "doc.richtext"); return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = "Snappilot.pdf"
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        if PDFExporter.export(imageURLs: images, to: dest) {
+            Toast.show("PDF exported · \(images.count) page\(images.count == 1 ? "" : "s")", symbol: "doc.richtext")
+            NSWorkspace.shared.activateFileViewerSelecting([dest])
+        } else {
+            Toast.show("PDF export failed", symbol: "exclamationmark.triangle.fill")
+        }
+    }
+}
+
+/// Ask the user for a tag via a small alert.
+@MainActor func promptForTag() -> String? {
+    let alert = NSAlert()
+    alert.messageText = "Add a tag"
+    alert.informativeText = "Tags make captures easy to find later."
+    alert.addButton(withTitle: "Add")
+    alert.addButton(withTitle: "Cancel")
+    let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+    field.placeholderString = "e.g. bug, design, todo"
+    alert.accessoryView = field
+    alert.window.initialFirstResponder = field
+    return alert.runModal() == .alertFirstButtonReturn ? field.stringValue : nil
 }
 
 /// A capture thumbnail card with favorite star, format badge, and a ⋯ menu.
@@ -341,6 +373,15 @@ private struct GalleryCard: View {
             .onTapGesture { open() }
 
             Text(record.title).font(.system(size: 13, weight: .medium)).foregroundStyle(.primary).lineLimit(1)
+            if !record.tagList.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(record.tagList.prefix(4), id: \.self) { tag in
+                        Text(tag).font(.system(size: 9, weight: .medium)).foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .background(Color.accentColor.opacity(0.15), in: Capsule())
+                    }
+                }
+            }
             HStack(spacing: 8) {
                 badge("\(record.width)×\(record.height)")
                 badge(record.format)
@@ -354,6 +395,14 @@ private struct GalleryCard: View {
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([library.fileURL(for: record)]) }
                     if record.kind == .image { Button("Copy Image") { copyImage() } }
                     Button(record.favorite ? "Remove from Favorites" : "Add to Favorites") { library.toggleFavorite(id: record.id) }
+                    Button("Add Tag…") { if let t = promptForTag() { library.addTag(t, to: record.id) } }
+                    if !record.tagList.isEmpty {
+                        Menu("Remove Tag") {
+                            ForEach(record.tagList, id: \.self) { tag in
+                                Button(tag) { library.removeTag(tag, from: record.id) }
+                            }
+                        }
+                    }
                     Divider()
                     Button("Move to Trash", role: .destructive) { library.moveToTrash(record) }
                 } label: {

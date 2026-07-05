@@ -18,16 +18,18 @@ public struct CaptureRecord: Codable, Equatable, Sendable, Identifiable {
     public var ocrText: String       // recognized text, for search ("" if none)
     public var title: String
     public var isFavorite: Bool?     // optional so old index files still decode
+    public var tags: [String]?       // optional so old index files still decode
 
     public init(id: String, kind: CaptureKind, fileName: String, createdAt: Date,
                 width: Int, height: Int, ocrText: String = "", title: String = "",
-                isFavorite: Bool? = nil) {
+                isFavorite: Bool? = nil, tags: [String]? = nil) {
         self.id = id; self.kind = kind; self.fileName = fileName; self.createdAt = createdAt
         self.width = width; self.height = height; self.ocrText = ocrText; self.title = title
-        self.isFavorite = isFavorite
+        self.isFavorite = isFavorite; self.tags = tags
     }
 
     public var favorite: Bool { isFavorite ?? false }
+    public var tagList: [String] { tags ?? [] }
 
     /// Uppercased file extension, e.g. "PNG" / "MP4".
     public var format: String { (fileName as NSString).pathExtension.uppercased() }
@@ -61,10 +63,11 @@ public enum CaptureLibrary {
         "\(relativeFolder(for: date, calendar: calendar))/\(stem(for: date, suffix: suffix, calendar: calendar)).\(ext)"
     }
 
-    /// Case-insensitive search over title + OCR text.
+    /// Case-insensitive search over title + OCR text + tags.
     public static func matches(_ record: CaptureRecord, query: String) -> Bool {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return true }
-        return record.title.lowercased().contains(q) || record.ocrText.lowercased().contains(q)
+        if record.title.lowercased().contains(q) || record.ocrText.lowercased().contains(q) { return true }
+        return record.tagList.contains { $0.lowercased().contains(q) }
     }
 }
