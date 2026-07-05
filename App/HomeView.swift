@@ -369,11 +369,62 @@ struct HomeView: View {
 
     private func taskKey(_ recordID: String, _ task: MeetingNotes.Task) -> String { "\(recordID)|\(task.id)" }
 
+    /// All tasks as a Markdown checklist, grouped by meeting.
+    private func tasksMarkdown() -> String {
+        var md = "# Meeting Tasks\n"
+        for item in meetingNotes where !item.doc.notes.tasks.isEmpty {
+            md += "\n## \(item.doc.title) — \(item.doc.date.formatted(date: .abbreviated, time: .shortened))\n"
+            for task in item.doc.notes.tasks {
+                let done = doneTasks.contains(taskKey(item.record.id, task))
+                md += "- [\(done ? "x" : " ")] **\(task.owner):** \(task.text)\n"
+            }
+        }
+        return md
+    }
+
+    private func copyTasks() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(tasksMarkdown(), forType: .string)
+        Toast.show("Tasks copied as a checklist", symbol: "checkmark")
+    }
+
+    private func exportTasks() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Meeting-Tasks.md"
+        panel.allowedContentTypes = [.plainText]
+        if panel.runModal() == .OK, let url = panel.url {
+            try? tasksMarkdown().write(to: url, atomically: true, encoding: .utf8)
+            Toast.show("Tasks exported", symbol: "square.and.arrow.up")
+        }
+    }
+
+    /// Add every not-yet-done task to Apple Reminders.
+    private func addTasksToReminders() {
+        let open = meetingNotes.flatMap { item in
+            item.doc.notes.tasks
+                .filter { !doneTasks.contains(taskKey(item.record.id, $0)) }
+                .map { "\($0.owner): \($0.text)" }
+        }
+        guard !open.isEmpty else { Toast.show("No open tasks to add", symbol: "checklist"); return }
+        TaskExporter.addToReminders(open)
+    }
+
     private var tasksView: some View {
         let meetings = meetingNotes.filter { !$0.doc.notes.tasks.isEmpty }
         return ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                header(title: "Tasks", subtitle: "Action items gathered from all your meetings.")
+                HStack {
+                    header(title: "Tasks", subtitle: "Action items gathered from all your meetings.")
+                    Spacer()
+                    if !meetings.isEmpty {
+                        Button { copyTasks() } label: { Label("Copy", systemImage: "doc.on.doc") }
+                            .buttonStyle(.bordered)
+                        Button { exportTasks() } label: { Label("Export", systemImage: "square.and.arrow.up") }
+                            .buttonStyle(.bordered)
+                        Button { addTasksToReminders() } label: { Label("Reminders", systemImage: "checklist") }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
                 if meetings.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: "checklist").font(.system(size: 44)).foregroundStyle(.tertiary)
@@ -697,6 +748,17 @@ private struct GalleryCard: View {
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing).padding(8)
+
+                if record.kind == .video, library.hasNotes(record) {
+                    Button { app.openMeetingNotes(for: record) } label: {
+                        Label("Notes", systemImage: "person.2.wave.2.fill")
+                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(.black.opacity(0.5), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading).padding(8)
+                }
             }
             .frame(height: 168)
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke, lineWidth: 1))

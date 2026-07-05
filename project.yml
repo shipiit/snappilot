@@ -34,4 +34,6 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Record your narration into screen recordings."
         INFOPLIST_KEY_NSCameraUsageDescription: "Show your webcam as an overlay in screen recordings."
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Transcribe your meeting recordings on-device to create notes and action items."
+        INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: "Add your meeting action items to Apple Reminders."
+        INFOPLIST_KEY_NSRemindersUsageDescription: "Add your meeting action items to Apple Reminders."
         ENABLE_HARDENED_RUNTIME: YES
