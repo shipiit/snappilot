@@ -104,23 +104,64 @@ final class LibraryStore: ObservableObject {
         (tasks.filter { $0.status == status }.map { $0.order }.max() ?? 0) + 1
     }
 
+    /// Next issue key, e.g. "SNAP-13".
+    private func nextKey() -> String {
+        let maxNum = tasks.compactMap { $0.key?.split(separator: "-").last.flatMap { Int($0) } }.max() ?? 0
+        return "SNAP-\(maxNum + 1)"
+    }
+
     @discardableResult
     func createTask(title: String, details: String = "", status: TaskStatus = .todo,
-                    owner: String? = nil, due: Date? = nil, imageFile: String? = nil,
-                    sourceMeetingID: String? = nil) -> TaskItem {
-        var task = TaskItem(title: title, details: details, status: status, owner: owner,
-                            due: due, imageFile: imageFile, order: nextOrder(in: status),
+                    priority: TaskPriority = .none, owner: String? = nil, labels: [String]? = nil,
+                    due: Date? = nil, imageFile: String? = nil, sourceMeetingID: String? = nil) -> TaskItem {
+        var task = TaskItem(key: nextKey(), title: title, details: details, status: status,
+                            priority: priority, owner: owner, labels: labels, due: due,
+                            imageFile: imageFile, updatedAt: Date(), order: nextOrder(in: status),
                             sourceMeetingID: sourceMeetingID)
         task.history.append(TaskEvent(text: "Created in \(status.title)"))
         tasks.append(task)
         persistTasks()
+        TaskNotifier.schedule(task)
         return task
+    }
+
+    /// Mutate a task in place, bump its updated time, persist.
+    private func mutate(_ id: String, _ block: (inout TaskItem) -> Void) {
+        guard let idx = tasks.firstIndex(where: { $0.id == id }) else { return }
+        block(&tasks[idx])
+        tasks[idx].updatedAt = Date()
+        persistTasks()
+    }
+
+    func setPriority(_ id: String, _ priority: TaskPriority) { mutate(id) { $0.priority = priority } }
+    func setLabels(_ id: String, _ labels: [String]) { mutate(id) { $0.labels = labels.isEmpty ? nil : labels } }
+
+    func addSubtask(_ id: String, title: String) {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        mutate(id) { $0.subtasks = ($0.subtasks ?? []) + [SubTask(title: t)] }
+    }
+    func toggleSubtask(_ id: String, subID: String) {
+        mutate(id) { task in
+            guard var list = task.subtasks, let i = list.firstIndex(where: { $0.id == subID }) else { return }
+            list[i].done.toggle(); task.subtasks = list
+        }
+    }
+    func removeSubtask(_ id: String, subID: String) {
+        mutate(id) { $0.subtasks?.removeAll { $0.id == subID } }
+    }
+    func addComment(_ id: String, author: String, text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        mutate(id) { $0.comments = ($0.comments ?? []) + [TaskComment(author: author, text: t)] }
     }
 
     func updateTask(_ task: TaskItem) {
         guard let idx = tasks.firstIndex(where: { $0.id == task.id }) else { return }
-        tasks[idx] = task
+        var t = task; t.updatedAt = Date()
+        tasks[idx] = t
         persistTasks()
+        TaskNotifier.schedule(t)
     }
 
     func moveTask(id: String, to status: TaskStatus) {
@@ -129,10 +170,34 @@ final class LibraryStore: ObservableObject {
         task.order = nextOrder(in: status)
         tasks[idx] = task
         persistTasks()
+        TaskNotifier.schedule(task)      // cancels the reminder once done
     }
 
     func deleteTask(id: String) {
         tasks.removeAll { $0.id == id }
+        persistTasks()
+        TaskNotifier.cancel(id)
+    }
+
+    func task(_ id: String) -> TaskItem? { tasks.first { $0.id == id } }
+
+    /// Copy an image/file into the library and attach it to a task.
+    @discardableResult
+    func addAttachment(to taskID: String, from url: URL) -> Bool {
+        guard let idx = tasks.firstIndex(where: { $0.id == taskID }), let rel = attachImage(from: url) else { return false }
+        var list = tasks[idx].attachments ?? []
+        list.append(rel)
+        tasks[idx].attachments = list
+        tasks[idx].history.append(TaskEvent(text: "Attached \(url.lastPathComponent)"))
+        persistTasks()
+        return true
+    }
+
+    func removeAttachment(from taskID: String, _ relativePath: String) {
+        guard let idx = tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        tasks[idx].attachments?.removeAll { $0 == relativePath }
+        if tasks[idx].imageFile == relativePath { tasks[idx].imageFile = nil }
+        try? FileManager.default.removeItem(at: attachmentURL(relativePath))
         persistTasks()
     }
 
