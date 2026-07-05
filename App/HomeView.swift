@@ -523,7 +523,10 @@ private struct GalleryCard: View {
                 Menu {
                     Button("Open") { open() }
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([library.fileURL(for: record)]) }
-                    if record.kind == .image { Button("Copy Image") { copyImage() } }
+                    if record.kind == .image {
+                        Button("Copy Image") { copyImage() }
+                        Button("Pin to Screen") { PinBoard.pin(url: library.fileURL(for: record)) }
+                    }
                     Button(record.favorite ? "Remove from Favorites" : "Add to Favorites") { library.toggleFavorite(id: record.id) }
                     Button("Add Tag…") { if let t = promptForTag() { library.addTag(t, to: record.id) } }
                     if !record.tagList.isEmpty {
