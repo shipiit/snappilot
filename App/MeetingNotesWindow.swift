@@ -3,12 +3,18 @@ import AppKit
 import SnapCore
 
 /// Everything produced for one meeting: the notes plus the raw transcript.
-struct MeetingDoc {
+struct MeetingDoc: Codable {
     var title: String
     var date: Date
     var notes: MeetingNotes
     var lines: [TranscriptLine]
     var recordingURL: URL?
+
+    /// Plain-text of the whole meeting, for library search.
+    func searchText() -> String {
+        (notes.summary + notes.keyPoints + notes.tasks.map { "\($0.owner) \($0.text)" }
+         + lines.map { "\($0.speaker): \($0.text)" }).joined(separator: "\n")
+    }
 
     /// Render the whole thing as portable Markdown.
     func markdown() -> String {

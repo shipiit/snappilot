@@ -242,7 +242,7 @@ final class AppState: ObservableObject {
                                               date: saved.createdAt,
                                               hasParticipants: self.lastHadParticipants,
                                               hasYou: self.lastHadYou,
-                                              preLines: captionLines)
+                                              preLines: captionLines, recordID: saved.id)
                 } else {
                     VideoPreviewWindowController.present(url: fileURL, title: saved.title)
                 }
@@ -319,7 +319,7 @@ final class AppState: ObservableObject {
     /// then show them and save a Markdown copy next to the recording.
     func generateMeetingNotes(url: URL, title: String, date: Date,
                               hasParticipants: Bool, hasYou: Bool,
-                              preLines: [TranscriptLine] = []) {
+                              preLines: [TranscriptLine] = [], recordID: String? = nil) {
         guard !generatingNotes else { return }
         generatingNotes = true
         let usingCaptions = !preLines.isEmpty
@@ -338,9 +338,14 @@ final class AppState: ObservableObject {
                 let notes = MeetingAnalyzer.analyze(lines)
                 let doc = MeetingDoc(title: title, date: date, notes: notes,
                                      lines: lines, recordingURL: url)
-                // Save a sidecar .md next to the recording.
+                // Save a sidecar .md (portable) + .notes.json (reopenable) next to the recording,
+                // and index the transcript so the meeting is searchable by what was said.
                 let sidecar = url.deletingPathExtension().appendingPathExtension("md")
                 try? doc.markdown().write(to: sidecar, atomically: true, encoding: .utf8)
+                if let recordID, let record = library.records.first(where: { $0.id == recordID }) {
+                    library.saveNotes(doc, for: record)
+                    library.setOCRText(id: record.id, doc.searchText())
+                }
                 generatingNotes = false
                 let speakerCount = Set(lines.map { $0.speaker }).count
                 if lines.isEmpty {
@@ -361,9 +366,19 @@ final class AppState: ObservableObject {
     }
 
     /// Generate notes for an existing recording already in the library.
-    func generateNotesForExisting(url: URL, title: String, date: Date) {
+    func generateNotesForExisting(url: URL, title: String, date: Date, recordID: String? = nil) {
         generateMeetingNotes(url: url, title: title, date: date,
-                             hasParticipants: true, hasYou: true)
+                             hasParticipants: true, hasYou: true, recordID: recordID)
+    }
+
+    /// Reopen already-generated notes instantly, or generate them if none exist yet.
+    func openMeetingNotes(for record: CaptureRecord) {
+        if let doc = library.loadNotes(for: record) {
+            MeetingNotesWindowController.present(doc)
+        } else {
+            generateNotesForExisting(url: library.fileURL(for: record),
+                                     title: record.title, date: record.createdAt, recordID: record.id)
+        }
     }
 
     /// Grab a still of the recorded area without stopping the recording.

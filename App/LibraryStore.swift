@@ -128,6 +128,27 @@ final class LibraryStore: ObservableObject {
         root.appendingPathComponent(record.fileName)
     }
 
+    // MARK: Meeting notes (sidecar next to the recording)
+
+    func notesURL(for record: CaptureRecord) -> URL {
+        fileURL(for: record).deletingPathExtension().appendingPathExtension("notes.json")
+    }
+
+    func hasNotes(_ record: CaptureRecord) -> Bool {
+        FileManager.default.fileExists(atPath: notesURL(for: record).path)
+    }
+
+    func saveNotes(_ doc: MeetingDoc, for record: CaptureRecord) {
+        guard let data = try? JSONEncoder.snap.encode(doc) else { return }
+        try? data.write(to: notesURL(for: record), options: .atomic)
+        objectWillChange.send()      // refresh Tasks / badges
+    }
+
+    func loadNotes(for record: CaptureRecord) -> MeetingDoc? {
+        guard let data = try? Data(contentsOf: notesURL(for: record)) else { return nil }
+        return try? JSONDecoder.snap.decode(MeetingDoc.self, from: data)
+    }
+
     /// Overwrite an existing capture's file with a new (edited) image, updating size and
     /// moving it to the front of the library.
     func overwrite(id: String, image: CGImage) {

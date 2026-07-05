@@ -4,7 +4,7 @@ import SnapCore
 private func C(_ hex: String) -> Color { Color(nsColor: nsColor(fromHex: hex)) }
 
 enum HomeSection: String, CaseIterable, Identifiable {
-    case dashboard, library, favorites, collections
+    case dashboard, library, favorites, collections, tasks
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -12,6 +12,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .library: return "Library"
         case .favorites: return "Favorites"
         case .collections: return "Collections"
+        case .tasks: return "Tasks"
         }
     }
     var icon: String {
@@ -20,6 +21,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .library: return "square.stack"
         case .favorites: return "star"
         case .collections: return "folder"
+        case .tasks: return "checklist"
         }
     }
 }
@@ -36,6 +38,7 @@ struct HomeView: View {
     @State private var showPDFSheet = false
     @State private var pdfSelection: Set<String> = []
     @State private var openCollection: String?
+    @State private var doneTasks: Set<String> = []
 
     var body: some View {
         HStack(spacing: 0) {
@@ -67,6 +70,7 @@ struct HomeView: View {
             navItem(.library, badge: library.records.count)
             navItem(.favorites, badge: library.favorites.isEmpty ? nil : library.favorites.count)
             navItem(.collections, badge: library.collections.isEmpty ? nil : library.collections.count)
+            navItem(.tasks, badge: openTaskCount == 0 ? nil : openTaskCount)
 
             Divider().padding(.vertical, 8).padding(.horizontal, 14)
 
@@ -127,6 +131,7 @@ struct HomeView: View {
             case .library: gallerySection(title: "Library", records: filtered(library.records))
             case .favorites: gallerySection(title: "Favorites", records: filtered(library.favorites))
             case .collections: collectionsView
+            case .tasks: tasksView
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -344,6 +349,74 @@ struct HomeView: View {
                     ForEach(records) { rec in GalleryCard(record: rec, library: library) }
                 }
             }
+        }
+    }
+
+    // MARK: Tasks (aggregated across all meeting notes)
+
+    /// Every meeting recording that has saved notes, newest first.
+    private var meetingNotes: [(record: CaptureRecord, doc: MeetingDoc)] {
+        library.records
+            .filter { $0.kind == .video && library.hasNotes($0) }
+            .compactMap { r in library.loadNotes(for: r).map { (r, $0) } }
+    }
+
+    private var openTaskCount: Int {
+        meetingNotes.reduce(0) { sum, item in
+            sum + item.doc.notes.tasks.filter { !doneTasks.contains(taskKey(item.record.id, $0)) }.count
+        }
+    }
+
+    private func taskKey(_ recordID: String, _ task: MeetingNotes.Task) -> String { "\(recordID)|\(task.id)" }
+
+    private var tasksView: some View {
+        let meetings = meetingNotes.filter { !$0.doc.notes.tasks.isEmpty }
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                header(title: "Tasks", subtitle: "Action items gathered from all your meetings.")
+                if meetings.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "checklist").font(.system(size: 44)).foregroundStyle(.tertiary)
+                        Text("No tasks yet").foregroundStyle(.secondary)
+                        Text("Record a meeting with “Record Meeting” — action items show up here automatically.")
+                            .font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center).frame(maxWidth: 360)
+                    }.frame(maxWidth: .infinity).padding(.vertical, 50)
+                } else {
+                    ForEach(meetings, id: \.record.id) { item in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Button { app.openMeetingNotes(for: item.record) } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "person.2.wave.2.fill").font(.caption)
+                                    Text(item.doc.title).font(.headline)
+                                    Text(item.doc.date.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }.buttonStyle(.plain)
+                            ForEach(item.doc.notes.tasks) { task in
+                                let key = taskKey(item.record.id, task)
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: doneTasks.contains(key) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(doneTasks.contains(key) ? Color.accentColor : .secondary)
+                                        .onTapGesture {
+                                            if doneTasks.contains(key) { doneTasks.remove(key) } else { doneTasks.insert(key) }
+                                        }
+                                    Text(task.text)
+                                        .strikethrough(doneTasks.contains(key))
+                                        .foregroundStyle(doneTasks.contains(key) ? .secondary : .primary)
+                                    Spacer()
+                                    Text(task.owner).font(.caption2).foregroundStyle(.secondary)
+                                        .padding(.horizontal, 7).padding(.vertical, 2)
+                                        .background(Theme.chipBG, in: Capsule())
+                                }
+                            }
+                        }
+                        .padding(14)
+                        .background(Theme.cardBG, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke, lineWidth: 1))
+                    }
+                }
+            }
+            .padding(28)
         }
     }
 
@@ -656,9 +729,17 @@ private struct GalleryCard: View {
                         Button("Pin to Screen") { PinBoard.pin(url: library.fileURL(for: record)) }
                     }
                     if record.kind == .video {
-                        Button("Meeting Notes (AI)") {
-                            app.generateNotesForExisting(url: library.fileURL(for: record),
-                                                         title: record.title, date: record.createdAt)
+                        if library.hasNotes(record) {
+                            Button("Open Meeting Notes") { app.openMeetingNotes(for: record) }
+                            Button("Regenerate Notes") {
+                                app.generateNotesForExisting(url: library.fileURL(for: record),
+                                                             title: record.title, date: record.createdAt, recordID: record.id)
+                            }
+                        } else {
+                            Button("Meeting Notes (AI)") {
+                                app.generateNotesForExisting(url: library.fileURL(for: record),
+                                                             title: record.title, date: record.createdAt, recordID: record.id)
+                            }
                         }
                     }
                     Button(record.favorite ? "Remove from Favorites" : "Add to Favorites") { library.toggleFavorite(id: record.id) }
