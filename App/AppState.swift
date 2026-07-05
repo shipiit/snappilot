@@ -16,6 +16,7 @@ final class AppState: ObservableObject {
     @Published var recordMic = false
     @Published var recordCamera = false
     @Published var recordCursor = true
+    @Published var recordCursorHighlight = false
     @Published var recordCountdown = true
     @Published var recordQuality: RecordQuality = .balanced
     @Published var captureDelay = 0        // seconds before a screenshot (0 = none)
@@ -196,6 +197,7 @@ final class AppState: ObservableObject {
             RecordingHUD.shared.hide()
             WebcamOverlay.shared.hide()
             RecordingFrame.shared.hide()
+            CursorHighlight.shared.stop()
             self.restoreOwnWindows()
             guard let url else { Toast.show("Recording failed", symbol: "exclamationmark.triangle.fill"); return }
             if let saved = self.library.saveVideo(from: url, width: saved_w, height: saved_h) {
@@ -221,6 +223,7 @@ final class AppState: ObservableObject {
                                     systemAudio: recordSystemAudio, micAudio: mic,
                                     captureCursor: recordCursor, quality: recordQuality)
                 isRecording = true
+                if recordCursorHighlight { CursorHighlight.shared.start() }
                 RecordingHUD.shared.show(
                     onStop: { [weak self] in self?.stopRecording() },
                     onSnapshot: { [weak self] in self?.snapshotDuringRecording(rect: rect, on: screen) })

@@ -181,6 +181,7 @@ struct HomeView: View {
             optionToggle("Microphone", "mic.fill", isOn: $app.recordMic)
             optionToggle("Camera", "camera.fill", isOn: $app.recordCamera)
             optionToggle("Cursor", "cursorarrow", isOn: $app.recordCursor)
+            optionToggle("Highlight", "cursorarrow.rays", isOn: $app.recordCursorHighlight)
             optionToggle("Countdown", "timer", isOn: $app.recordCountdown)
             Spacer()
             HStack(spacing: 8) {
