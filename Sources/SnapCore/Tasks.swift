@@ -76,8 +76,9 @@ public struct SubTask: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var title: String
     public var done: Bool
-    public init(id: String = UUID().uuidString, title: String, done: Bool = false) {
-        self.id = id; self.title = title; self.done = done
+    public var details: String?
+    public init(id: String = UUID().uuidString, title: String, done: Bool = false, details: String? = nil) {
+        self.id = id; self.title = title; self.done = done; self.details = details
     }
 }
 

@@ -68,14 +68,7 @@ struct CreateTaskSheet: View {
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor.opacity(title.isEmpty ? 0.5 : 0.2)))
                 }
                 field("Description") {
-                    VStack(spacing: 0) {
-                        mdToolbar
-                        Divider()
-                        TextEditor(text: $details)
-                            .font(.body).frame(height: 150).padding(6).scrollContentBackground(.hidden)
-                    }
-                    .background(Theme.panelBG, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.stroke))
+                    MarkdownEditor(text: $details, placeholder: "Add a detailed description…", minHeight: 150)
                 }
                 field("Subtasks") {
                     VStack(alignment: .leading, spacing: 6) {
@@ -99,32 +92,6 @@ struct CreateTaskSheet: View {
             }
             .padding(20)
         }
-    }
-
-    private var mdToolbar: some View {
-        HStack(spacing: 2) {
-            mdButton("bold", "**", "**")
-            mdButton("italic", "*", "*")
-            mdButton("strikethrough", "~~", "~~")
-            Divider().frame(height: 16)
-            mdInsert("list.bullet", "\n- ")
-            mdInsert("list.number", "\n1. ")
-            mdInsert("checklist", "\n- [ ] ")
-            mdInsert("text.quote", "\n> ")
-            mdButton("chevron.left.forwardslash.chevron.right", "`", "`")
-            mdInsert("link", "[text](url)")
-            Spacer()
-        }
-        .padding(.horizontal, 8).padding(.vertical, 5)
-    }
-
-    private func mdButton(_ icon: String, _ pre: String, _ post: String) -> some View {
-        Button { details += "\(pre)text\(post)" } label: { Image(systemName: icon).font(.system(size: 12)) }
-            .buttonStyle(.borderless).frame(width: 24, height: 22)
-    }
-    private func mdInsert(_ icon: String, _ snippet: String) -> some View {
-        Button { details += snippet } label: { Image(systemName: icon).font(.system(size: 12)) }
-            .buttonStyle(.borderless).frame(width: 24, height: 22)
     }
 
     private var dropZone: some View {

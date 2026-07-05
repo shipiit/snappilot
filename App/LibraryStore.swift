@@ -150,6 +150,14 @@ final class LibraryStore: ObservableObject {
     func removeSubtask(_ id: String, subID: String) {
         mutate(id) { $0.subtasks?.removeAll { $0.id == subID } }
     }
+    func updateSubtask(_ id: String, subID: String, title: String? = nil, details: String? = nil) {
+        mutate(id) { task in
+            guard var list = task.subtasks, let i = list.firstIndex(where: { $0.id == subID }) else { return }
+            if let title { list[i].title = title }
+            if let details { list[i].details = details }
+            task.subtasks = list
+        }
+    }
     func addComment(_ id: String, author: String, text: String) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return }

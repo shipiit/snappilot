@@ -45,6 +45,7 @@ private struct TaskDetailView: View {
     @State private var tab: DetailTab = .activity
     @State private var newSubtask = ""
     @State private var newComment = ""
+    @State private var editingSub: SubTask?
 
     init(library: LibraryStore, taskID: String, onClose: @escaping () -> Void) {
         self.library = library; self.taskID = taskID; self.onClose = onClose
@@ -67,6 +68,9 @@ private struct TaskDetailView: View {
             }
             .background(Theme.appBG)
             .onDisappear { save() }
+            .sheet(item: $editingSub) { sub in
+                SubtaskDetailSheet(library: library, taskID: taskID, subtask: sub)
+            }
         } else {
             Text("This task was deleted.").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -142,8 +146,7 @@ private struct TaskDetailView: View {
                         .padding(12).background(Theme.panelBG, in: RoundedRectangle(cornerRadius: 10))
                 }
             } else {
-                TextEditor(text: $details).font(.system(.body, design: .monospaced)).frame(minHeight: 140)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.stroke))
+                MarkdownEditor(text: $details, placeholder: "Add a detailed description…", minHeight: 140)
             }
         }
     }
@@ -166,10 +169,17 @@ private struct TaskDetailView: View {
                         .foregroundStyle(sub.done ? Color.accentColor : .secondary)
                         .onTapGesture { library.toggleSubtask(taskID, subID: sub.id) }
                     Text(sub.title).strikethrough(sub.done).foregroundStyle(sub.done ? .secondary : .primary)
+                    if !(sub.details ?? "").isEmpty {
+                        Image(systemName: "text.alignleft").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    }
                     Spacer()
+                    Button { editingSub = sub } label: { Image(systemName: "arrow.up.right.square").foregroundStyle(.secondary) }
+                        .buttonStyle(.borderless).help("Open subtask")
                     Button { library.removeSubtask(taskID, subID: sub.id) } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
                         .buttonStyle(.borderless)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { editingSub = sub }
             }
             HStack(spacing: 8) {
                 Image(systemName: "plus.circle").foregroundStyle(.secondary)
@@ -193,15 +203,17 @@ private struct TaskDetailView: View {
                 if task.history.isEmpty { Text("No activity yet").font(.caption).foregroundStyle(.tertiary) }
             case .comments:
                 ForEach(task.commentList) { c in
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         HStack { Text(c.author).font(.caption.bold()); Text(c.date.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(.tertiary) }
-                        Text(c.text).font(.callout)
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
+                        MarkdownView(text: c.text)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(10)
                         .background(Theme.panelBG, in: RoundedRectangle(cornerRadius: 8))
                 }
-                HStack {
-                    TextField("Add a comment…", text: $newComment).textFieldStyle(.roundedBorder)
-                    Button { library.addComment(taskID, author: "You", text: newComment); newComment = "" } label: { Image(systemName: "paperplane.fill") }
+                VStack(alignment: .trailing, spacing: 6) {
+                    MarkdownEditor(text: $newComment, placeholder: "Add a comment… (Markdown supported)", minHeight: 60)
+                    Button { library.addComment(taskID, author: "You", text: newComment); newComment = "" } label: {
+                        Label("Comment", systemImage: "paperplane.fill")
+                    }.buttonStyle(.borderedProminent)
                         .disabled(newComment.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             case .files:
@@ -320,5 +332,71 @@ private struct TaskDetailView: View {
         t.owner = assignee.trimmingCharacters(in: .whitespaces).isEmpty ? nil : assignee
         t.due = hasDue ? due : nil
         library.updateTask(t)
+    }
+}
+
+/// A focused view of a single subtask: rename it, toggle done, and give it its own
+/// Markdown description (Preview/Edit) — like opening a linked sub-issue.
+private struct SubtaskDetailSheet: View {
+    @ObservedObject var library: LibraryStore
+    let taskID: String
+    let subtask: SubTask
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var title: String
+    @State private var details: String
+    @State private var done: Bool
+    @State private var preview = true
+
+    init(library: LibraryStore, taskID: String, subtask: SubTask) {
+        self.library = library; self.taskID = taskID; self.subtask = subtask
+        _title = State(initialValue: subtask.title)
+        _details = State(initialValue: subtask.details ?? "")
+        _done = State(initialValue: subtask.done)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Image(systemName: done ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(done ? Color.accentColor : .secondary)
+                    .onTapGesture { done.toggle() }
+                Text("Subtask").font(.headline)
+                Spacer()
+                Button { dismiss() } label: { Image(systemName: "xmark") }.buttonStyle(.borderless)
+            }
+            TextField("Subtask title", text: $title).textFieldStyle(.plain).font(.title3.bold())
+
+            HStack {
+                Text("Description").font(.subheadline.weight(.semibold))
+                Spacer()
+                Picker("", selection: $preview) { Text("Preview").tag(true); Text("Edit").tag(false) }
+                    .pickerStyle(.segmented).fixedSize()
+            }
+            if preview {
+                if details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("No description. Switch to Edit to add Markdown.").font(.callout).foregroundStyle(.tertiary)
+                } else {
+                    MarkdownView(text: details).frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12).background(Theme.panelBG, in: RoundedRectangle(cornerRadius: 10))
+                }
+            } else {
+                MarkdownEditor(text: $details, placeholder: "Describe this subtask…", minHeight: 140)
+            }
+
+            HStack {
+                Button(role: .destructive) { library.removeSubtask(taskID, subID: subtask.id); dismiss() } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+                Spacer()
+                Button("Done") { save(); dismiss() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20).frame(width: 460)
+    }
+
+    private func save() {
+        library.updateSubtask(taskID, subID: subtask.id, title: title, details: details)
+        if done != subtask.done { library.toggleSubtask(taskID, subID: subtask.id) }
     }
 }
