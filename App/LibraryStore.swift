@@ -368,6 +368,7 @@ final class LibraryStore: ObservableObject {
         do { try FileManager.default.moveItem(at: tempURL, to: fileURL) }
         catch { try? FileManager.default.copyItem(at: tempURL, to: fileURL) }
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        try? FileManager.default.removeItem(at: tempURL)   // drop the temp copy if move fell back to copy
 
         let stem = CaptureLibrary.stem(for: date, suffix: suffix)
         let record = CaptureRecord(id: stem, kind: .video, fileName: rel, createdAt: date,
@@ -380,6 +381,19 @@ final class LibraryStore: ObservableObject {
 
     func fileURL(for record: CaptureRecord) -> URL {
         root.appendingPathComponent(record.fileName)
+    }
+
+    /// Delete orphaned temp files the recorder/transcriber may leave behind (e.g. if a save
+    /// fell back to copy, or a meeting export was interrupted). Call once at launch.
+    func cleanupTempFiles() {
+        let tmp = FileManager.default.temporaryDirectory
+        guard let items = try? FileManager.default.contentsOfDirectory(at: tmp, includingPropertiesForKeys: nil) else { return }
+        for url in items {
+            let name = url.lastPathComponent
+            if name.hasPrefix("snappilot-") || name.hasPrefix("snap-mtg-") {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
     }
 
     // MARK: Meeting notes (sidecar next to the recording)
