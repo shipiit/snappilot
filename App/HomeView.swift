@@ -32,6 +32,7 @@ struct HomeView: View {
 
     @State private var section: HomeSection = .dashboard
     @State private var query = ""
+    @State private var showRecOptions = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -175,27 +176,75 @@ struct HomeView: View {
         }
     }
 
+    private var enabledSummary: [(String, String)] {
+        var out: [(String, String)] = []
+        if app.recordSystemAudio { out.append(("Audio", "speaker.wave.2.fill")) }
+        if app.recordMic { out.append(("Mic", "mic.fill")) }
+        if app.recordCamera { out.append(("Camera", "web.camera.fill")) }
+        if app.recordCursorHighlight { out.append(("Highlight", "cursorarrow.rays")) }
+        if app.recordCountdown { out.append(("Countdown", "timer")) }
+        return out
+    }
+
     private var recordingBar: some View {
-        HStack(spacing: 26) {
-            optionToggle("System Audio", "waveform", isOn: $app.recordSystemAudio)
-            optionToggle("Microphone", "mic.fill", isOn: $app.recordMic)
-            optionToggle("Camera", "camera.fill", isOn: $app.recordCamera)
-            optionToggle("Cursor", "cursorarrow", isOn: $app.recordCursor)
-            optionToggle("Highlight", "cursorarrow.rays", isOn: $app.recordCursorHighlight)
-            optionToggle("Countdown", "timer", isOn: $app.recordCountdown)
-            Spacer()
-            HStack(spacing: 8) {
-                Image(systemName: "wand.and.stars").foregroundStyle(.secondary).font(.system(size: 13))
-                Text("Quality").font(.system(size: 13)).foregroundStyle(.primary).lineLimit(1).fixedSize()
-                Picker("", selection: $app.recordQuality) {
-                    ForEach(RecordQuality.allCases, id: \.self) { Text($0.title).tag($0) }
-                }.labelsHidden().fixedSize().help("Higher quality = larger file")
+        HStack(spacing: 10) {
+            Image(systemName: "record.circle").foregroundStyle(.red).font(.system(size: 14))
+            Text("Recording").font(.system(size: 13, weight: .medium))
+            ForEach(enabledSummary, id: \.0) { title, icon in
+                HStack(spacing: 4) {
+                    Image(systemName: icon).font(.system(size: 10))
+                    Text(title).font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(Theme.chipBG, in: Capsule())
             }
-            .fixedSize()
+            if enabledSummary.isEmpty {
+                Text("screen only").font(.system(size: 11)).foregroundStyle(.tertiary)
+            }
+            Spacer()
+            Text(app.recordQuality.title).font(.system(size: 11)).foregroundStyle(.secondary)
+                .padding(.horizontal, 8).padding(.vertical, 3).background(Theme.chipBG, in: Capsule())
+            Button { showRecOptions.toggle() } label: {
+                Label("Customize", systemImage: "slider.horizontal.3")
+            }
+            .buttonStyle(.bordered)
+            .popover(isPresented: $showRecOptions, arrowEdge: .bottom) { optionsPopover }
         }
-        .padding(.horizontal, 20).padding(.vertical, 14)
+        .padding(.horizontal, 20).padding(.vertical, 12)
         .background(Theme.panelBG, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.stroke, lineWidth: 1))
+    }
+
+    private var optionsPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Recording Options").font(.headline)
+            popoverToggle("System audio", "speaker.wave.2.fill", $app.recordSystemAudio)
+            popoverToggle("Microphone", "mic.fill", $app.recordMic)
+            popoverToggle("Camera overlay", "web.camera.fill", $app.recordCamera)
+            popoverToggle("Show cursor", "cursorarrow", $app.recordCursor)
+            popoverToggle("Cursor highlight & clicks", "cursorarrow.rays", $app.recordCursorHighlight)
+            popoverToggle("Countdown before recording", "timer", $app.recordCountdown)
+            Divider()
+            HStack {
+                Image(systemName: "wand.and.stars").foregroundStyle(.secondary).frame(width: 20)
+                Text("Quality").font(.callout)
+                Spacer()
+                Picker("", selection: $app.recordQuality) {
+                    ForEach(RecordQuality.allCases, id: \.self) { Text($0.title).tag($0) }
+                }.labelsHidden().fixedSize()
+            }
+        }
+        .padding(16).frame(width: 290)
+    }
+
+    private func popoverToggle(_ title: String, _ icon: String, _ binding: Binding<Bool>) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).foregroundStyle(binding.wrappedValue ? Color.accentColor : .secondary).frame(width: 20)
+            Text(title).font(.callout)
+            Spacer()
+            Toggle("", isOn: binding).labelsHidden().toggleStyle(.switch).controlSize(.small)
+        }
     }
 
     private func optionToggle(_ title: String, _ icon: String, isOn: Binding<Bool>) -> some View {
