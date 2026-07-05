@@ -104,9 +104,53 @@ struct HomeView: View {
             navButton("questionmark.circle", "Help & Guide") { WelcomeWindowController.present(app: app) }
 
             Spacer()
+            storageCard
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Theme.sidebarBG)
+    }
+
+    private var storageCard: some View {
+        let u = library.storageUsage()
+        let total = max(1, u.total)
+        func fmt(_ b: Int64) -> String { ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
+        let segments: [(String, Int64, Color)] = [
+            ("Screenshots", u.screenshots, C("#3B82F6")),
+            ("Videos", u.videos, C("#EC4899")),
+            ("Attachments", u.attachments, C("#22C55E")),
+            ("Notes", u.notes, C("#5E6AD2")),
+            ("Tasks", u.tasks, C("#E2A03F")),
+        ]
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("Storage", systemImage: "internaldrive").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                Spacer()
+                Text(fmt(u.total)).font(.system(size: 11, weight: .semibold))
+            }
+            GeometryReader { geo in
+                HStack(spacing: 1) {
+                    ForEach(segments, id: \.0) { seg in
+                        Rectangle().fill(seg.2)
+                            .frame(width: max(0, geo.size.width * CGFloat(Double(seg.1) / Double(total))))
+                    }
+                    Rectangle().fill(Theme.stroke)   // remaining track
+                }
+            }
+            .frame(height: 6).clipShape(Capsule())
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(segments.filter { $0.1 > 0 }, id: \.0) { seg in
+                    HStack(spacing: 5) {
+                        Circle().fill(seg.2).frame(width: 6, height: 6)
+                        Text(seg.0).font(.system(size: 9)).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(fmt(seg.1)).font(.system(size: 9)).foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(Theme.cardBG, in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 12).padding(.bottom, 12)
     }
 
     private func navItem(_ s: HomeSection, badge: Int?) -> some View {

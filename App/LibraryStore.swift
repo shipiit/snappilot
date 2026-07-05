@@ -217,6 +217,42 @@ final class LibraryStore: ObservableObject {
         Array(Set(notes.compactMap { $0.folder }.filter { !$0.isEmpty })).sorted { $0.lowercased() < $1.lowercased() }
     }
 
+    // MARK: Storage usage
+
+    struct StorageUsage: Equatable {
+        var screenshots: Int64 = 0
+        var videos: Int64 = 0
+        var attachments: Int64 = 0
+        var notes: Int64 = 0
+        var tasks: Int64 = 0
+        var total: Int64 { screenshots + videos + attachments + notes + tasks }
+    }
+
+    /// How much disk each part of the app is using (bytes).
+    func storageUsage() -> StorageUsage {
+        var u = StorageUsage()
+        for r in records {
+            let size = fileSize(fileURL(for: r))
+            if r.kind == .video { u.videos += size } else { u.screenshots += size }
+        }
+        u.attachments = directorySize(root.appendingPathComponent("task-attachments"))
+        u.notes = fileSize(notesURL) + fileSize(root.appendingPathComponent("index.json"))
+        u.tasks = fileSize(tasksURL) + fileSize(collectionsURL)
+        // Meeting-notes sidecars (.notes.json / .md) count toward notes too.
+        return u
+    }
+
+    private func fileSize(_ url: URL) -> Int64 {
+        ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+    }
+
+    private func directorySize(_ dir: URL) -> Int64 {
+        guard let en = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
+        var total: Int64 = 0
+        for case let f as URL in en { total += fileSize(f) }
+        return total
+    }
+
     func updateTask(_ task: TaskItem) {
         guard let idx = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         var t = task; t.updatedAt = Date()

@@ -108,6 +108,8 @@ Every capture auto-saves to a **searchable local library** — searchable even b
 ### Record
 - 🎥 Record a **region or the full screen** → compact **HEVC MP4** (Small / Balanced / High quality)
 - 🔊 System audio · 🎙️ Microphone · 📷 **Webcam overlay** · 🖱️ cursor — all optional
+- 🎙️ **Microphone noise cancellation** — voice-processed mic (noise suppression + echo cancellation)
+- ⏸️ **Pause / Resume** — the paused span is stitched out cleanly
 - ⏱️ **"Ready to Record"** panel + **3·2·1 countdown** (outside the frame) + a live **frame indicator**
 - ✍️ **Draw on screen while recording** — pen, highlighter, a fading **laser pointer** & arrows,
   captured into the video. Ink **auto-fades** when you stop, Google-Meet style (press `Esc` to exit).
@@ -115,23 +117,50 @@ Every capture auto-saves to a **searchable local library** — searchable even b
 - ▶️ Recordings open in Snappilot's **own player** — never QuickTime — with **Trim**,
   **Annotate** (draw on a frame, baked over the whole clip), and **GIF export**
 
+### 🧠 Meeting Mode (on-device AI)
+- 🎙️ **Record a call** (Google Meet / Zoom) and get an automatic **transcript** — all processed
+  **on your Mac**, nothing uploaded.
+- 🗣️ Speakers split into **You vs Participants** automatically (mic vs system audio); real
+  **per-speaker names** are read from **Google Meet's live captions** when they're on.
+- ✅ Auto-generated **Summary, Action Items & Key Points** — saved as Markdown next to the
+  recording, searchable, and one-click **imported into the task board**.
+
+### 📸 Capture, extended
+- 📜 **Scrolling capture** — auto-scroll a long page and stitch it into one tall image
+- 🗂️ **Collections** — drag captures into named groups · 🏷️ **tags** · 📌 **Pin to Screen**
+- 📄 **PDF export** — pick images and export a multi-page PDF
+
+### ✅ Tasks — a Linear-style board
+- 🗂️ Board **To do / In progress / Review / Done** + a **List view**; **drag** cards to change status
+- 🔑 Issue-key chips · 🚩 priority · 🏷️ labels · 👤 assignee avatars · subtask **progress bars**
+- 📝 Full task detail page: **Markdown** description, **subtasks with their own descriptions**,
+  **comments** (Markdown), activity history, image/file **attachments**
+- 🔔 **Due-date reminders** (local notifications) · ⬆️ export to Markdown / **Apple Reminders**
+
+### 📓 Notes — a Markdown workspace
+- ✍️ **Live split editor** — raw Markdown ↔ rendered preview, updating as you type
+- 🖼️ **Images in Markdown** (insert, drag-and-drop, `![alt](url)` renders inline)
+- ⭐ favorite · 📌 pin · 🗄️ archive · duplicate · export; search; word count & reading time
+- 🧭 Notes list lives in the **collapsible** main sidebar for a distraction-free editor
+
 ### OCR & Library
 - 🔤 **Grab Text** — extract selectable text from any region via Apple Vision
 - 🗂️ Every capture **auto-saves** to a local library, **searchable by the text inside it**
-- ⭐ Favorites · 📋 copy · 🗑️ delete · 🔎 instant search
+- ⭐ Favorites · 📋 copy · 🗑️ delete · 🔎 instant search · 💾 live **storage usage** in the sidebar
 
 ### Design
 - 🌗 Full **light & dark** theme support (follows your system)
-- 🧭 Clean sidebar dashboard · menu-bar quick access · full app menu
+- 🧭 Clean **collapsible** sidebar dashboard · menu-bar quick access · full app menu with shortcuts
 
 ## ⌨️ Default shortcuts
 
 | Shortcut | Action |          | Shortcut | Action |
 |----------|--------|----------|----------|--------|
-| `⌃⇧1`    | Region |          | `⌃⇧5`    | Record Region |
-| `⌃⇧2`    | Window |          | `⌃⇧6`    | Record Screen |
-| `⌃⇧3`    | Full Screen |     | `⌃⇧.`    | Stop Recording |
-| `⌃⇧4`    | Grab Text (OCR) | |          | *(all customizable in Settings)* |
+| `⌃⇧1`    | Region |          | `⌃⇧6`    | Record Screen |
+| `⌃⇧2`    | Window |          | `⌃⇧7`    | Scrolling Capture |
+| `⌃⇧3`    | Full Screen |     | `⌃⇧8`    | Record Meeting |
+| `⌃⇧4`    | Grab Text (OCR) | | `⌃⇧.`    | Stop Recording |
+| `⌃⇧5`    | Record Region |  |          | *(all customizable in Settings)* |
 
 ## 🛠️ Build & run
 
@@ -161,9 +190,13 @@ through clean value types.
 
 ## 🗺️ Roadmap
 
-- Video **trim** + **annotation** · **GIF export**
-- **Scrolling capture** (stitch long pages)
-- Floating recording **control bar** + cursor click-highlight
+**Shipped:** ✅ Meeting Mode · ✅ Scrolling capture · ✅ Collections & tags · ✅ PDF export ·
+✅ Pause/Resume · ✅ Noise cancellation · ✅ Task board · ✅ Notes workspace
+
+**Next:**
+- Timeline view + Filter / Sort / Group on the task board
+- Per-subtask due dates & assignees · linked issues
+- Note folders & backlinks · slash-commands in the editor
 - Templates / step-guides · quick share
 
 ## 🤝 Contributing
