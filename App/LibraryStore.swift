@@ -9,9 +9,11 @@ import UniformTypeIdentifiers
 @MainActor
 final class LibraryStore: ObservableObject {
     @Published private(set) var records: [CaptureRecord] = []
+    @Published private(set) var collections: [Collection] = []
 
     let root: URL
     private var indexURL: URL { root.appendingPathComponent("index.json") }
+    private var collectionsURL: URL { root.appendingPathComponent("collections.json") }
 
     init(root: URL = CaptureLibrary.defaultRoot()) {
         self.root = root
@@ -20,14 +22,65 @@ final class LibraryStore: ObservableObject {
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: indexURL),
-              let decoded = try? JSONDecoder.snap.decode([CaptureRecord].self, from: data) else { return }
-        records = decoded.sorted { $0.createdAt > $1.createdAt }
+        if let data = try? Data(contentsOf: indexURL),
+           let decoded = try? JSONDecoder.snap.decode([CaptureRecord].self, from: data) {
+            records = decoded.sorted { $0.createdAt > $1.createdAt }
+        }
+        if let data = try? Data(contentsOf: collectionsURL),
+           let decoded = try? JSONDecoder.snap.decode([Collection].self, from: data) {
+            collections = decoded.sorted { $0.createdAt > $1.createdAt }
+        }
     }
 
     private func persistIndex() {
         guard let data = try? JSONEncoder.snap.encode(records) else { return }
         try? data.write(to: indexURL, options: .atomic)
+    }
+
+    private func persistCollections() {
+        guard let data = try? JSONEncoder.snap.encode(collections) else { return }
+        try? data.write(to: collectionsURL, options: .atomic)
+    }
+
+    // MARK: Collections
+
+    @discardableResult
+    func createCollection(name: String) -> Collection {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let c = Collection(id: UUID().uuidString, name: n.isEmpty ? "Untitled Collection" : n)
+        collections.insert(c, at: 0)
+        persistCollections()
+        return c
+    }
+
+    func renameCollection(id: String, to name: String) {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty, let idx = collections.firstIndex(where: { $0.id == id }) else { return }
+        collections[idx].name = n
+        persistCollections()
+    }
+
+    func deleteCollection(id: String) {
+        collections.removeAll { $0.id == id }
+        persistCollections()
+    }
+
+    func addToCollection(_ collectionID: String, recordID: String) {
+        guard let idx = collections.firstIndex(where: { $0.id == collectionID }),
+              !collections[idx].recordIDs.contains(recordID) else { return }
+        collections[idx].recordIDs.insert(recordID, at: 0)
+        persistCollections()
+    }
+
+    func removeFromCollection(_ collectionID: String, recordID: String) {
+        guard let idx = collections.firstIndex(where: { $0.id == collectionID }) else { return }
+        collections[idx].recordIDs.removeAll { $0 == recordID }
+        persistCollections()
+    }
+
+    /// Records belonging to a collection, newest first, skipping any that were deleted.
+    func records(in collection: Collection) -> [CaptureRecord] {
+        collection.recordIDs.compactMap { id in records.first { $0.id == id } }
     }
 
     /// Save a rendered PNG into the library and index it. Returns the saved record.
@@ -126,6 +179,11 @@ final class LibraryStore: ObservableObject {
         try? FileManager.default.trashItem(at: fileURL(for: record), resultingItemURL: nil)
         records.removeAll { $0.id == record.id }
         persistIndex()
+        var changed = false
+        for i in collections.indices where collections[i].recordIDs.contains(record.id) {
+            collections[i].recordIDs.removeAll { $0 == record.id }; changed = true
+        }
+        if changed { persistCollections() }
     }
 
     var favorites: [CaptureRecord] { records.filter { $0.favorite } }

@@ -35,6 +35,7 @@ struct HomeView: View {
     @State private var showRecOptions = false
     @State private var showPDFSheet = false
     @State private var pdfSelection: Set<String> = []
+    @State private var openCollection: String?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -65,7 +66,7 @@ struct HomeView: View {
             navItem(.dashboard, badge: nil)
             navItem(.library, badge: library.records.count)
             navItem(.favorites, badge: library.favorites.isEmpty ? nil : library.favorites.count)
-            navItem(.collections, badge: nil)
+            navItem(.collections, badge: library.collections.isEmpty ? nil : library.collections.count)
 
             Divider().padding(.vertical, 8).padding(.horizontal, 14)
 
@@ -125,7 +126,7 @@ struct HomeView: View {
             case .dashboard: dashboard
             case .library: gallerySection(title: "Library", records: filtered(library.records))
             case .favorites: gallerySection(title: "Favorites", records: filtered(library.favorites))
-            case .collections: collectionsPlaceholder
+            case .collections: collectionsView
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -345,16 +346,133 @@ struct HomeView: View {
         }
     }
 
-    private var collectionsPlaceholder: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "folder").font(.system(size: 54)).foregroundStyle(.tertiary)
-            Text("Collections").font(.title2.bold()).foregroundStyle(.primary)
-            Text("Group captures into collections. Use “New Folder” on the Dashboard to make one in your library.")
-                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 360)
-            Button { app.openLibraryFolder() } label: { Label("Open library folder", systemImage: "folder") }
-                .buttonStyle(.bordered)
+    @ViewBuilder private var collectionsView: some View {
+        if let id = openCollection, let coll = library.collections.first(where: { $0.id == id }) {
+            collectionDetail(coll)
+        } else {
+            collectionsGrid
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var collectionsGrid: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack {
+                    header(title: "Collections", subtitle: "Group captures together. Drag any capture onto a collection to add it.")
+                    Spacer()
+                    Button { newCollection() } label: { Label("New Collection", systemImage: "folder.badge.plus") }
+                        .buttonStyle(.bordered).controlSize(.large)
+                }
+                if library.collections.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "folder").font(.system(size: 44)).foregroundStyle(.tertiary)
+                        Text("No collections yet").foregroundStyle(.secondary)
+                        Text("Make one, then drag captures onto it — or use “Add to Collection” from a capture’s ⋯ menu.")
+                            .font(.caption).foregroundStyle(.tertiary).multilineTextAlignment(.center).frame(maxWidth: 340)
+                    }.frame(maxWidth: .infinity).padding(.vertical, 40)
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4), spacing: 16) {
+                        ForEach(library.collections) { coll in collectionCard(coll) }
+                    }
+                }
+            }
+            .padding(28)
+        }
+    }
+
+    private func collectionCard(_ coll: Collection) -> some View {
+        let members = library.records(in: coll)
+        return Button { openCollection = coll.id } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12).fill(Theme.panelBG).frame(height: 120)
+                    if let first = members.first, let img = NSImage(contentsOf: library.fileURL(for: first)) {
+                        Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                            .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        Image(systemName: "folder").font(.system(size: 34)).foregroundStyle(.tertiary)
+                    }
+                }
+                Text(coll.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(.primary).lineLimit(1)
+                Text("\(coll.count) item\(coll.count == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .background(Theme.cardBG, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.stroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Rename…") { if let n = promptText("Rename collection", coll.name) { library.renameCollection(id: coll.id, to: n) } }
+            Button("Delete Collection", role: .destructive) { library.deleteCollection(id: coll.id) }
+        }
+        .onDrop(of: [.text], isTargeted: nil) { providers in
+            dropRecords(providers, into: coll.id); return true
+        }
+    }
+
+    private func collectionDetail(_ coll: Collection) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(spacing: 10) {
+                    Button { openCollection = nil } label: { Image(systemName: "chevron.left") }
+                        .buttonStyle(.borderless)
+                    header(title: coll.name, subtitle: "\(coll.count) item\(coll.count == 1 ? "" : "s") · drag more captures here to add.")
+                    Spacer()
+                    Button { if let n = promptText("Rename collection", coll.name) { library.renameCollection(id: coll.id, to: n) } } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }.buttonStyle(.bordered)
+                }
+                let members = library.records(in: coll)
+                if members.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "tray").font(.system(size: 40)).foregroundStyle(.tertiary)
+                        Text("Empty — drag captures here, or use “Add to Collection” from a ⋯ menu.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity).padding(.vertical, 40)
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4), spacing: 16) {
+                        ForEach(members) { rec in
+                            GalleryCard(record: rec, library: library)
+                                .contextMenu {
+                                    Button("Remove from Collection", role: .destructive) {
+                                        library.removeFromCollection(coll.id, recordID: rec.id)
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
+            .padding(28)
+        }
+        .onDrop(of: [.text], isTargeted: nil) { providers in
+            dropRecords(providers, into: coll.id); return true
+        }
+    }
+
+    /// Load dropped record ids and add them to a collection.
+    private func dropRecords(_ providers: [NSItemProvider], into collectionID: String) {
+        for provider in providers {
+            _ = provider.loadObject(ofClass: NSString.self) { obj, _ in
+                guard let id = obj as? String else { return }
+                Task { @MainActor in library.addToCollection(collectionID, recordID: id) }
+            }
+        }
+    }
+
+    private func newCollection() {
+        if let name = promptText("New collection", "") { library.createCollection(name: name) }
+    }
+
+    /// Simple single-field prompt via NSAlert.
+    private func promptText(_ title: String, _ initial: String) -> String? {
+        let alert = NSAlert(); alert.messageText = title
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.stringValue = initial
+        alert.accessoryView = field
+        alert.addButton(withTitle: "OK"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let t = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
     }
 
     private func newFolder() {
@@ -543,6 +661,13 @@ private struct GalleryCard: View {
                         }
                     }
                     Button(record.favorite ? "Remove from Favorites" : "Add to Favorites") { library.toggleFavorite(id: record.id) }
+                    if !library.collections.isEmpty {
+                        Menu("Add to Collection") {
+                            ForEach(library.collections) { coll in
+                                Button(coll.name) { library.addToCollection(coll.id, recordID: record.id) }
+                            }
+                        }
+                    }
                     Button("Add Tag…") { if let t = promptForTag() { library.addTag(t, to: record.id) } }
                     if !record.tagList.isEmpty {
                         Menu("Remove Tag") {
@@ -559,6 +684,7 @@ private struct GalleryCard: View {
                 .menuStyle(.borderlessButton).frame(width: 22)
             }
         }
+        .onDrag { NSItemProvider(object: record.id as NSString) }
         .task {
             let url = library.fileURL(for: record)
             if record.kind == .image {

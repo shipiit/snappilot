@@ -35,6 +35,22 @@ public struct CaptureRecord: Codable, Equatable, Sendable, Identifiable {
     public var format: String { (fileName as NSString).pathExtension.uppercased() }
 }
 
+/// A named, user-curated group of captures. Membership is stored by record id, so a
+/// capture can live in several collections at once without duplicating files.
+public struct Collection: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    public var name: String
+    public var recordIDs: [String]
+    public var createdAt: Date
+
+    public init(id: String, name: String, recordIDs: [String] = [], createdAt: Date = Date()) {
+        self.id = id; self.name = name; self.recordIDs = recordIDs; self.createdAt = createdAt
+    }
+
+    public var count: Int { recordIDs.count }
+    public func contains(_ recordID: String) -> Bool { recordIDs.contains(recordID) }
+}
+
 public enum CaptureLibrary {
     /// Default library root: ~/Pictures/Snappilot (visible, user-owned, easy to find).
     public static func defaultRoot() -> URL {
