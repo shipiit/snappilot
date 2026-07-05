@@ -44,6 +44,9 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
     private let queue = DispatchQueue(label: "ai.snappilot.recording")
     private var started = false
     private var finishing = false
+    private var paused = false
+    private var pauseStart = CMTime.invalid
+    private var pausedOffset = CMTime.zero
     private(set) var isRecording = false
     private var outputURL: URL?
     private var pixelSize = CGSize.zero
@@ -157,10 +160,56 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
         self.writer = writer
     }
 
+    /// Pause: stop appending frames and start counting paused time.
+    func pause() {
+        queue.async { [weak self] in
+            guard let self, self.started, !self.paused, !self.finishing else { return }
+            self.paused = true
+            self.pauseStart = CMClockGetTime(CMClockGetHostTimeClock())
+        }
+    }
+
+    /// Resume: fold the paused duration into the offset so the timeline is seamless.
+    func resume() {
+        queue.async { [weak self] in
+            guard let self, self.paused else { return }
+            if self.pauseStart.isValid {
+                let now = CMClockGetTime(CMClockGetHostTimeClock())
+                self.pausedOffset = CMTimeAdd(self.pausedOffset, CMTimeSubtract(now, self.pauseStart))
+            }
+            self.pauseStart = .invalid
+            self.paused = false
+        }
+    }
+
+    /// Shift a sample buffer's timestamps back by the accumulated paused time.
+    private func shiftedByPause(_ sb: CMSampleBuffer) -> CMSampleBuffer? {
+        guard CMTimeCompare(pausedOffset, .zero) != 0 else { return sb }
+        var count: CMItemCount = 0
+        CMSampleBufferGetSampleTimingInfoArray(sb, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count)
+        guard count > 0 else { return sb }
+        var timings = [CMSampleTimingInfo](repeating: CMSampleTimingInfo(), count: Int(count))
+        CMSampleBufferGetSampleTimingInfoArray(sb, entryCount: count, arrayToFill: &timings, entriesNeededOut: &count)
+        for i in 0..<Int(count) {
+            if timings[i].presentationTimeStamp.isValid {
+                timings[i].presentationTimeStamp = CMTimeSubtract(timings[i].presentationTimeStamp, pausedOffset)
+            }
+            if timings[i].decodeTimeStamp.isValid {
+                timings[i].decodeTimeStamp = CMTimeSubtract(timings[i].decodeTimeStamp, pausedOffset)
+            }
+        }
+        var out: CMSampleBuffer?
+        CMSampleBufferCreateCopyWithNewTiming(allocator: kCFAllocatorDefault, sampleBuffer: sb,
+                                              sampleTimingEntryCount: count, sampleTimingArray: timings,
+                                              sampleBufferOut: &out)
+        return out ?? sb
+    }
+
     func stop() {
         queue.async { [weak self] in
             guard let self, !self.finishing else { return }
             self.finishing = true
+            self.paused = false
             self.isRecording = false
             let stream = self.stream
             // Stop the stream first, then finalize the writer on our serial queue so it
@@ -201,7 +250,8 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
 
     private func reset() {
         stream = nil; writer = nil; videoInput = nil; audioInput = nil; micInput = nil
-        started = false; finishing = false; outputURL = nil
+        started = false; finishing = false; paused = false
+        pauseStart = .invalid; pausedOffset = .zero; outputURL = nil
     }
 
     // MARK: SCStreamOutput
@@ -220,14 +270,15 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
                 writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
                 started = true
             }
+            if paused { return }
             if let input = videoInput, input.isReadyForMoreMediaData {
-                input.append(sampleBuffer)
+                input.append(shiftedByPause(sampleBuffer) ?? sampleBuffer)
             }
-        } else if type == .audio, started, let input = audioInput, input.isReadyForMoreMediaData {
-            input.append(sampleBuffer)
-        } else if #available(macOS 15.0, *), type == .microphone, started,
+        } else if type == .audio, started, !paused, let input = audioInput, input.isReadyForMoreMediaData {
+            input.append(shiftedByPause(sampleBuffer) ?? sampleBuffer)
+        } else if #available(macOS 15.0, *), type == .microphone, started, !paused,
                   let input = micInput, input.isReadyForMoreMediaData {
-            input.append(sampleBuffer)
+            input.append(shiftedByPause(sampleBuffer) ?? sampleBuffer)
         }
     }
 

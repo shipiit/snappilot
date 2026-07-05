@@ -12,13 +12,19 @@ final class RecordingHUD {
     private var timeLabel: NSTextField?
     private var onStop: (() -> Void)?
     private var onSnapshot: (() -> Void)?
+    private var onPause: (() -> Void)?
+    private var pauseButton: NSButton?
+    private var paused = false
 
-    func show(onStop: @escaping () -> Void, onSnapshot: (() -> Void)? = nil) {
+    func show(onStop: @escaping () -> Void, onSnapshot: (() -> Void)? = nil,
+              onPause: (() -> Void)? = nil) {
         self.onStop = onStop
         self.onSnapshot = onSnapshot
+        self.onPause = onPause
         seconds = 0
+        paused = false
 
-        let width: CGFloat = 360, height: CGFloat = 44
+        let width: CGFloat = 430, height: CGFloat = 44
         guard let screen = NSScreen.main else { return }
         let frame = NSRect(x: screen.frame.midX - width / 2, y: screen.frame.maxY - 90,
                            width: width, height: height)
@@ -49,6 +55,17 @@ final class RecordingHUD {
         label.frame = NSRect(x: 36, y: height/2 - 11, width: 70, height: 22)
         bg.addSubview(label)
         timeLabel = label
+
+        if onPause != nil {
+            let pause = NSButton(image: NSImage(systemSymbolName: "pause.fill", accessibilityDescription: "Pause")!,
+                                 target: self, action: #selector(pauseTapped))
+            pause.bezelStyle = .rounded
+            pause.imagePosition = .imageOnly
+            pause.frame = NSRect(x: 110, y: height/2 - 15, width: 44, height: 30)
+            pause.toolTip = "Pause the recording"
+            bg.addSubview(pause)
+            pauseButton = pause
+        }
 
         if onSnapshot != nil {
             let snap = NSButton(image: NSImage(systemSymbolName: "camera.fill", accessibilityDescription: "Screenshot")!,
@@ -82,8 +99,18 @@ final class RecordingHUD {
     }
 
     private func tick() {
+        guard !paused else { return }        // freeze the clock while paused
         seconds += 1
         timeLabel?.stringValue = String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    }
+
+    @objc private func pauseTapped() {
+        paused.toggle()
+        let symbol = paused ? "play.fill" : "pause.fill"
+        pauseButton?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: paused ? "Resume" : "Pause")
+        pauseButton?.toolTip = paused ? "Resume the recording" : "Pause the recording"
+        timeLabel?.textColor = paused ? .secondaryLabelColor : .labelColor
+        onPause?()
     }
 
     @objc private func stopTapped() {

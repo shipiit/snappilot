@@ -21,6 +21,12 @@ final class AppState: ObservableObject {
     @Published var recordQuality: RecordQuality = .balanced
     @Published var captureDelay = 0        // seconds before a screenshot (0 = none)
     @Published var isRecording = false
+    @Published var isPaused = false
+
+    func togglePause() {
+        if isPaused { RecordingController.shared.resume(); isPaused = false }
+        else { RecordingController.shared.pause(); isPaused = true }
+    }
 
     /// Run a capture after an optional countdown delay (for timed screenshots).
     private func withCaptureDelay(_ action: @escaping () -> Void) {
@@ -224,9 +230,11 @@ final class AppState: ObservableObject {
                                     captureCursor: recordCursor, quality: recordQuality)
                 isRecording = true
                 if recordCursorHighlight { CursorHighlight.shared.start() }
+                isPaused = false
                 RecordingHUD.shared.show(
                     onStop: { [weak self] in self?.stopRecording() },
-                    onSnapshot: { [weak self] in self?.snapshotDuringRecording(rect: rect, on: screen) })
+                    onSnapshot: { [weak self] in self?.snapshotDuringRecording(rect: rect, on: screen) },
+                    onPause: { [weak self] in self?.togglePause() })
             } catch {
                 WebcamOverlay.shared.hide()
                 RecordingFrame.shared.hide()
@@ -261,6 +269,7 @@ final class AppState: ObservableObject {
     private var saved_h: Int { Int((RecordingController.shared.recordingPixelSize.height)) }
 
     func stopRecording() {
+        isPaused = false
         RecordingController.shared.stop()
     }
 
