@@ -157,6 +157,14 @@ final class AppState: ObservableObject {
         recordMic = true
         recordNoiseCancellation = true
         meetingMode = true
+        // For real per-speaker names we read Google Meet's live captions, which needs
+        // Accessibility permission — prompt now so it's ready. If not granted, the meeting
+        // still works and falls back to You / Participants from the audio.
+        if !ScrollCaptureController.accessibilityTrusted() {
+            Toast.show("Tip: allow Accessibility so Snappilot can read Meet captions for names",
+                       symbol: "captions.bubble")
+            ScrollCaptureController.promptAccessibility()
+        }
         recordScreen()
     }
 
@@ -225,6 +233,7 @@ final class AppState: ObservableObject {
             guard let url else { Toast.show("Recording failed", symbol: "exclamationmark.triangle.fill"); return }
             let wasMeeting = self.meetingMode
             self.meetingMode = false
+            let captionLines = wasMeeting ? MeetCaptionReader.shared.stop() : []
             if let saved = self.library.saveVideo(from: url, width: saved_w, height: saved_h) {
                 Toast.show("Recording saved", symbol: "video.fill")
                 let fileURL = self.library.fileURL(for: saved)
@@ -232,7 +241,8 @@ final class AppState: ObservableObject {
                     self.generateMeetingNotes(url: fileURL, title: saved.title,
                                               date: saved.createdAt,
                                               hasParticipants: self.lastHadParticipants,
-                                              hasYou: self.lastHadYou)
+                                              hasYou: self.lastHadYou,
+                                              preLines: captionLines)
                 } else {
                     VideoPreviewWindowController.present(url: fileURL, title: saved.title)
                 }
@@ -260,6 +270,7 @@ final class AppState: ObservableObject {
                 isRecording = true
                 lastHadParticipants = recordSystemAudio
                 lastHadYou = mic
+                if meetingMode, MeetCaptionReader.supported() { MeetCaptionReader.shared.start() }
                 if recordCursorHighlight { CursorHighlight.shared.start() }
                 isPaused = false
                 RecordingHUD.shared.show(
@@ -307,15 +318,23 @@ final class AppState: ObservableObject {
     /// Transcribe a meeting recording on-device and build notes (summary, tasks, key points),
     /// then show them and save a Markdown copy next to the recording.
     func generateMeetingNotes(url: URL, title: String, date: Date,
-                              hasParticipants: Bool, hasYou: Bool) {
+                              hasParticipants: Bool, hasYou: Bool,
+                              preLines: [TranscriptLine] = []) {
         guard !generatingNotes else { return }
         generatingNotes = true
-        Toast.show("Transcribing meeting on-device…", symbol: "waveform")
+        let usingCaptions = !preLines.isEmpty
+        Toast.show(usingCaptions ? "Building notes from Meet captions…" : "Transcribing meeting on-device…",
+                   symbol: usingCaptions ? "captions.bubble.fill" : "waveform")
         Task {
             do {
-                let lines = try await MeetingTranscriber.transcribe(
-                    url: url, hasParticipants: hasParticipants, hasYou: hasYou,
-                    progress: { msg in Task { @MainActor in Toast.show(msg, symbol: "waveform") } })
+                let lines: [TranscriptLine]
+                if usingCaptions {
+                    lines = preLines            // named, timestamped lines straight from Meet
+                } else {
+                    lines = try await MeetingTranscriber.transcribe(
+                        url: url, hasParticipants: hasParticipants, hasYou: hasYou,
+                        progress: { msg in Task { @MainActor in Toast.show(msg, symbol: "waveform") } })
+                }
                 let notes = MeetingAnalyzer.analyze(lines)
                 let doc = MeetingDoc(title: title, date: date, notes: notes,
                                      lines: lines, recordingURL: url)

@@ -60,10 +60,39 @@ final class MeetingNotesWindowController: NSWindowController {
 extension MeetingNotesWindowController: NSWindowDelegate {}
 
 private struct MeetingNotesView: View {
-    let doc: MeetingDoc
+    @State private var doc: MeetingDoc
     let onClose: () -> Void
     @State private var done: Set<String> = []
     @State private var copied = false
+
+    init(doc: MeetingDoc, onClose: @escaping () -> Void) {
+        _doc = State(initialValue: doc)
+        self.onClose = onClose
+    }
+
+    private var speakers: [String] { Array(Set(doc.lines.map { $0.speaker })).sorted() }
+
+    private func renameSpeaker(_ from: String, to: String) {
+        let n = to.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !n.isEmpty else { return }
+        for i in doc.lines.indices where doc.lines[i].speaker == from { doc.lines[i].speaker = n }
+        for i in doc.notes.tasks.indices where doc.notes.tasks[i].owner == from { doc.notes.tasks[i].owner = n }
+        // Keep the sidecar Markdown in sync with the renamed speakers.
+        if let url = doc.recordingURL?.deletingPathExtension().appendingPathExtension("md") {
+            try? doc.markdown().write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private func promptRename(_ current: String) -> String? {
+        let alert = NSAlert(); alert.messageText = "Rename speaker"
+        alert.informativeText = "Give “\(current)” a real name."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        field.stringValue = current == "You" ? current : ""
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Rename"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        return field.stringValue
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -99,6 +128,14 @@ private struct MeetingNotesView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            if !speakers.isEmpty {
+                Menu {
+                    ForEach(speakers, id: \.self) { sp in
+                        Button("Rename “\(sp)”…") { if let n = promptRename(sp) { renameSpeaker(sp, to: n) } }
+                    }
+                } label: { Label("Speakers", systemImage: "person.crop.circle") }
+                .fixedSize()
+            }
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(doc.markdown(), forType: .string)
