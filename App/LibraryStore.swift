@@ -318,6 +318,16 @@ final class LibraryStore: ObservableObject {
 
     func attachmentURL(_ relativePath: String) -> URL { root.appendingPathComponent(relativePath) }
 
+    /// Save an in-memory image (e.g. from the clipboard) into the attachments folder as PNG.
+    func saveAttachment(image: NSImage) -> String? {
+        guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:]) else { return nil }
+        let dir = root.appendingPathComponent("task-attachments", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let rel = "task-attachments/\(UUID().uuidString.prefix(8)).png"
+        do { try png.write(to: root.appendingPathComponent(rel)); return rel } catch { return nil }
+    }
+
     /// Import action items from all meeting notes into the board (skips already-imported ones).
     @discardableResult
     func importMeetingActionItems() -> Int {

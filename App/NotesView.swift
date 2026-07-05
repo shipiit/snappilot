@@ -161,6 +161,9 @@ struct NotesView: View {
                     Image(systemName: note.isFavorite ? "star.fill" : "star").foregroundStyle(note.isFavorite ? .yellow : .secondary)
                 }.buttonStyle(.borderless)
                 Spacer()
+                Button { pasteImage() } label: { Image(systemName: "doc.on.clipboard") }
+                    .buttonStyle(.borderless).help("Paste image from clipboard (⌘⇧V)")
+                    .keyboardShortcut("v", modifiers: [.command, .shift])
                 Button { insertImage(note) } label: { Image(systemName: "photo") }.buttonStyle(.borderless).help("Insert image")
                 Picker("", selection: $mode) { ForEach(NoteMode.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                     .pickerStyle(.segmented).fixedSize()
@@ -260,8 +263,29 @@ struct NotesView: View {
     }
     private func attach(_ url: URL) {
         guard let rel = library.attachImage(from: url) else { return }
+        insertImageMarkdown(name: url.deletingPathExtension().lastPathComponent, rel: rel)
+    }
+
+    /// Paste an image (or image file) from the clipboard into the note.
+    private func pasteImage() {
+        let pb = NSPasteboard.general
+        if let images = pb.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+           let image = images.first, let rel = library.saveAttachment(image: image) {
+            insertImageMarkdown(name: "pasted-image", rel: rel)
+            Toast.show("Image pasted", symbol: "photo")
+        } else if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+                  let url = urls.first,
+                  ["png","jpg","jpeg","gif","heic","tiff"].contains(url.pathExtension.lowercased()) {
+            attach(url)
+        } else {
+            Toast.show("No image on the clipboard", symbol: "clipboard")
+        }
+    }
+
+    /// Insert image Markdown with a default width (edit the `|480` number to resize).
+    private func insertImageMarkdown(name: String, rel: String) {
         let fileURL = library.attachmentURL(rel)
-        draftBody += "\n\n![\(url.deletingPathExtension().lastPathComponent)](\(fileURL.absoluteString))\n"
+        draftBody += "\n\n![\(name)|480](\(fileURL.absoluteString))\n"
     }
     private func exportNote(_ note: Note) {
         let panel = NSSavePanel()

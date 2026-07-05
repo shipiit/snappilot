@@ -118,15 +118,21 @@ struct MarkdownView: View {
                 .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.chipBG, in: RoundedRectangle(cornerRadius: 8))
         case .image(let alt, let urlString):
+            let (caption, width) = parseWidth(alt)
             if let img = loadImage(urlString) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: 360, alignment: .leading)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    if !alt.isEmpty { Text(alt).font(.caption2).foregroundStyle(.secondary) }
+                    if let width {
+                        Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
+                            .frame(width: width).clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else {
+                        Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: 360, alignment: .leading)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    if !caption.isEmpty { Text(caption).font(.caption2).foregroundStyle(.secondary) }
                 }
             } else {
-                Label(alt.isEmpty ? "Image" : alt, systemImage: "photo").font(.callout).foregroundStyle(.secondary)
+                Label(caption.isEmpty ? "Image" : caption, systemImage: "photo").font(.callout).foregroundStyle(.secondary)
             }
         case .divider:
             Divider().padding(.vertical, 2)
@@ -135,6 +141,16 @@ struct MarkdownView: View {
         case .blank:
             Spacer().frame(height: 2)
         }
+    }
+
+    /// Split an image alt of the form `caption|400` into (caption, width). Width is a point size.
+    private func parseWidth(_ alt: String) -> (String, CGFloat?) {
+        guard let bar = alt.lastIndex(of: "|") else { return (alt, nil) }
+        let widthStr = alt[alt.index(after: bar)...].trimmingCharacters(in: .whitespaces)
+        if let w = Double(widthStr), w > 20 {
+            return (String(alt[..<bar]).trimmingCharacters(in: .whitespaces), CGFloat(w))
+        }
+        return (alt, nil)
     }
 
     /// Load an image referenced by a Markdown image URL (file path, file:// URL, or a
