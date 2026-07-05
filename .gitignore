@@ -6,3 +6,6 @@ DerivedData/
 .DS_Store
 docs/superpowers/
 dist/
+
+# Built release artifact
+Snappilot.dmg
