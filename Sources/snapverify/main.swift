@@ -131,5 +131,34 @@ check(!notes.tasks.contains { $0.text.lowercased() == "yeah." },
       "one-word fragments are not tasks")
 check(MeetingAnalyzer.splitSentences("One. Two! Three?").count == 3, "splits three sentences")
 
+// MARK: Scrolling capture stitcher
+func grad(_ w: Int, _ h: Int) -> CGImage? {   // monotonic, distinct rows, no modular wrap
+    guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                              bytesPerRow: 0, space: CGColorSpaceCreateDeviceGray(),
+                              bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+    for row in 0..<h {
+        ctx.setFillColor(gray: CGFloat(row) / CGFloat(max(1, h - 1)), alpha: 1)
+        ctx.fill(CGRect(x: 0, y: h - 1 - row, width: w, height: 1))   // row 0 = top
+    }
+    return ctx.makeImage()
+}
+if let source = grad(40, 250) {
+    // Simulate scrolling: 150-tall viewport moving down 50px at a time.
+    let offsets = [0, 50, 100]
+    let frames = offsets.compactMap { source.cropping(to: CGRect(x: 0, y: $0, width: 40, height: 150)) }
+    check(frames.count == 3, "built 3 scroll frames")
+    if let stitched = ScrollStitcher.stitch(frames) {
+        check(stitched.width == 40, "stitched keeps width")
+        check(abs(stitched.height - 250) <= 10, "stitched recovers full height (got \(stitched.height))")
+    } else {
+        check(false, "stitch produced an image")
+    }
+    // Two identical frames → no new rows appended (overlap ≈ full height).
+    if let f = frames.first {
+        let same = ScrollStitcher.stitch([f, f])
+        check(same != nil && abs(same!.height - f.height) <= 6, "identical frames don't duplicate")
+    }
+}
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -160,6 +160,7 @@ struct HomeView: View {
                         captureCard("Window", "Capture a specific application window", "macwindow", hotkeys.display(.captureWindow), [C("#22B8CF"), C("#0E8FA8")]) { app.captureWindow() }
                         captureCard("Full Screen", "Capture your entire screen", "display", hotkeys.display(.captureFull), [C("#8B5CF6"), C("#6D28D9")]) { app.captureFullScreen() }
                         captureCard("Grab Text (OCR)", "Extract text from any area", "text.viewfinder", hotkeys.display(.grabText), [C("#22C55E"), C("#16A34A")]) { app.grabText() }
+                        captureCard("Scrolling Capture", "Capture a long page into one tall image", "arrow.down.doc", "", [C("#0EA5E9"), C("#0284C7")]) { app.scrollingCapture() }
                         captureCard("Record Region", "Record a specific area", "record.circle", hotkeys.display(.recordRegion), [C("#F97316"), C("#EF4444")]) { app.toggleRecordRegion() }
                         captureCard("Record Screen", "Record your entire screen", "rectangle.badge.record", hotkeys.display(.recordScreen), [C("#EC4899"), C("#DB2777")]) { app.toggleRecordScreen() }
                         captureCard("Record Meeting", "Record a call, then auto-transcribe & get tasks", "person.2.wave.2.fill", app.generatingNotes ? "Working…" : "AI", [C("#6366F1"), C("#4F46E5")]) { app.recordMeeting() }

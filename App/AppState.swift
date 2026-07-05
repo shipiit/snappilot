@@ -356,6 +356,33 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Scrolling capture: drag out a region, then auto-scroll + stitch into one tall image.
+    func scrollingCapture() {
+        hideOwnWindows()
+        selector = RegionSelector()
+        selector?.present(mode: .region) { [weak self] outcome in
+            guard let self else { return }
+            guard case let .region(screen, rect) = outcome else { self.restoreOwnWindows(); return }
+            if !ScrollCaptureController.accessibilityTrusted() {
+                Toast.show("Allow Accessibility for Snappilot so it can auto-scroll", symbol: "hand.raised.fill")
+                ScrollCaptureController.promptAccessibility()
+            }
+            Toast.show("Scrolling capture — keep the window still…", symbol: "arrow.down.doc")
+            ScrollCaptureController.shared.start(region: rect, on: screen) { [weak self] image in
+                guard let self else { return }
+                guard let image else {
+                    self.restoreOwnWindows()
+                    Toast.show("Scrolling capture failed", symbol: "exclamationmark.triangle.fill")
+                    return
+                }
+                let selection = CaptureSelection(rect: CGRect(x: 0, y: 0, width: image.width, height: image.height),
+                                                 displayID: CaptureController.screenNumber(screen), scale: 1)
+                self.openEditor(with: CaptureResult(image: image, selection: selection))
+                Toast.show("Scrolling capture saved", symbol: "arrow.down.doc.fill")
+            }
+        }
+    }
+
     /// Hotkey-friendly toggles: start if idle, stop if already recording.
     func toggleRecordRegion() { isRecording ? stopRecording() : recordRegion() }
     func toggleRecordScreen() { isRecording ? stopRecording() : recordScreen() }
