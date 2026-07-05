@@ -24,6 +24,7 @@ final class AppState: ObservableObject {
     @Published var isRecording = false
     @Published var isPaused = false
     @Published var generatingNotes = false
+    @Published var selectedNoteID: String?
 
     // Meeting Mode: when set, notes are generated from the recording once it stops.
     private var meetingMode = false

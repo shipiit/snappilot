@@ -35,6 +35,7 @@ struct HomeView: View {
     @Environment(\.openSettings) private var openSettings
 
     @State private var section: HomeSection = .dashboard
+    @State private var sidebarCollapsed = false
     @State private var query = ""
     @State private var showRecOptions = false
     @State private var showPDFSheet = false
@@ -43,12 +44,30 @@ struct HomeView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            sidebar.frame(width: 236)
-            Rectangle().fill(Theme.stroke).frame(width: 1)
+            if !sidebarCollapsed {
+                Group {
+                    if section == .notes {
+                        NotesSidebar(library: library, selectedID: $app.selectedNoteID) { section = .dashboard }
+                    } else {
+                        sidebar
+                    }
+                }
+                .frame(width: 236)
+                Rectangle().fill(Theme.stroke).frame(width: 1)
+            }
             content
         }
-        .frame(minWidth: 980, minHeight: 640)
+        .frame(minWidth: 900, minHeight: 640)
         .background(Theme.appBG)
+        .overlay(alignment: .topLeading) {
+            if sidebarCollapsed {
+                Button { withAnimation(.easeInOut(duration: 0.15)) { sidebarCollapsed = false } } label: {
+                    Image(systemName: "sidebar.left").padding(8)
+                        .background(Theme.cardBG, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain).padding(10)
+            }
+        }
         .sheet(isPresented: $showPDFSheet) { pdfSheet }
     }
 
@@ -64,6 +83,10 @@ struct HomeView: View {
                     Text("Snappilot").font(.system(size: 17, weight: .bold)).foregroundStyle(.primary)
                     Text("Capture · Annotate · Record · OCR").font(.system(size: 9)).foregroundStyle(.secondary)
                 }
+                Spacer()
+                Button { withAnimation(.easeInOut(duration: 0.15)) { sidebarCollapsed = true } } label: {
+                    Image(systemName: "sidebar.left").foregroundStyle(.secondary)
+                }.buttonStyle(.borderless).help("Collapse sidebar")
             }
             .padding(.horizontal, 18).padding(.top, 16).padding(.bottom, 22)
 
@@ -134,7 +157,7 @@ struct HomeView: View {
             case .favorites: gallerySection(title: "Favorites", records: filtered(library.favorites))
             case .collections: collectionsView
             case .tasks: tasksView
-            case .notes: NotesView(library: library)
+            case .notes: NotesView(library: library, selectedID: $app.selectedNoteID)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

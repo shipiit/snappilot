@@ -22,6 +22,7 @@ struct MarkdownView: View {
         case checkbox(Bool, String)
         case quote(String)
         case code(String)
+        case image(String, String)   // alt, url
         case divider
         case paragraph(String)
         case blank
@@ -47,6 +48,7 @@ struct MarkdownView: View {
             if trimmed.isEmpty { result.append(.blank); number = 1; continue }
             if trimmed == "---" || trimmed == "***" { result.append(.divider); continue }
 
+            if let img = imageLine(trimmed) { result.append(.image(img.0, img.1)); continue }
             if let h = heading(trimmed) { result.append(.heading(h.0, h.1)); continue }
             if trimmed.hasPrefix("- [ ] ") { result.append(.checkbox(false, String(trimmed.dropFirst(6)))); continue }
             if trimmed.lowercased().hasPrefix("- [x] ") { result.append(.checkbox(true, String(trimmed.dropFirst(6)))); continue }
@@ -67,6 +69,14 @@ struct MarkdownView: View {
             if s.hasPrefix(prefix) { return (level, String(s.dropFirst(prefix.count))) }
         }
         return nil
+    }
+
+    /// Parse a line that is exactly an image: `![alt](url)`.
+    private func imageLine(_ s: String) -> (String, String)? {
+        guard s.hasPrefix("!["), let bracket = s.range(of: "]("), s.hasSuffix(")") else { return nil }
+        let alt = String(s[s.index(s.startIndex, offsetBy: 2)..<bracket.lowerBound])
+        let url = String(s[bracket.upperBound..<s.index(before: s.endIndex)])
+        return url.isEmpty ? nil : (alt, url)
     }
 
     private func numbered(_ s: String) -> String? {
@@ -107,6 +117,17 @@ struct MarkdownView: View {
             Text(t).font(.system(.callout, design: .monospaced))
                 .padding(10).frame(maxWidth: .infinity, alignment: .leading)
                 .background(Theme.chipBG, in: RoundedRectangle(cornerRadius: 8))
+        case .image(let alt, let urlString):
+            if let img = loadImage(urlString) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 360, alignment: .leading)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    if !alt.isEmpty { Text(alt).font(.caption2).foregroundStyle(.secondary) }
+                }
+            } else {
+                Label(alt.isEmpty ? "Image" : alt, systemImage: "photo").font(.callout).foregroundStyle(.secondary)
+            }
         case .divider:
             Divider().padding(.vertical, 2)
         case .paragraph(let t):
@@ -114,6 +135,14 @@ struct MarkdownView: View {
         case .blank:
             Spacer().frame(height: 2)
         }
+    }
+
+    /// Load an image referenced by a Markdown image URL (file path, file:// URL, or a
+    /// bare absolute path). Remote http(s) images are not fetched inline.
+    private func loadImage(_ urlString: String) -> NSImage? {
+        if urlString.hasPrefix("http") { return nil }
+        if let url = URL(string: urlString), url.isFileURL, let img = NSImage(contentsOf: url) { return img }
+        return NSImage(contentsOfFile: urlString)
     }
 
     /// Inline formatting via AttributedString markdown (bold, italic, code, links).
