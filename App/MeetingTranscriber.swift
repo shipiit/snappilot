@@ -56,7 +56,7 @@ enum MeetingTranscriber {
 
         let total = try await asset.load(.duration).seconds
         var lines: [TranscriptLine] = []
-        let window = 120.0            // transcribe in 2-minute windows
+        let window = 50.0            // transcribe in ~50s windows
 
         for job in jobs {
             var offset = 0.0
@@ -112,20 +112,23 @@ enum MeetingTranscriber {
         }
         let request = SFSpeechURLRecognitionRequest(url: url)
         request.requiresOnDeviceRecognition = true
-        request.shouldReportPartialResults = false
+        request.shouldReportPartialResults = true   // stream everything; a clip yields many results
 
         return try await withCheckedThrowingContinuation { cont in
-            var resumed = false
-            recognizer.recognitionTask(with: request) { result, error in
-                if let error {
-                    if !resumed { resumed = true; cont.resume(throwing: error) }
-                    return
+            // The recognizer delivers many results per clip (one per utterance). Accumulate ALL
+            // of their words, de-duplicated by timestamp, and only finish once results stop
+            // arriving (debounced after the last final) — otherwise we'd keep just the first phrase.
+            let box = RecognitionBox(cont)
+            let task = recognizer.recognitionTask(with: request) { result, error in
+                if let error { box.fail(error); return }
+                guard let result else { return }
+                for seg in result.bestTranscription.segments {
+                    box.add(word: seg.substring, at: seg.timestamp)
                 }
-                guard let result, result.isFinal, !resumed else { return }
-                resumed = true
-                let segs = result.bestTranscription.segments.map { ($0.substring, $0.timestamp) }
-                cont.resume(returning: segs)
+                if result.isFinal { box.scheduleFinish() }
             }
+            box.onTimeout = { task.cancel() }
+            box.armSafetyTimeout()
         }
     }
 
@@ -156,5 +159,55 @@ enum MeetingTranscriber {
                                         start: offset + start))
         }
         return lines
+    }
+}
+
+/// Collects every word the recognizer emits for one clip (de-duplicated by timestamp) and
+/// resumes the continuation once results stop arriving — so we keep the whole clip, not just
+/// its first phrase. Thread-safe because the recognizer's callback runs off the main queue.
+private final class RecognitionBox: @unchecked Sendable {
+    private let cont: CheckedContinuation<[(text: String, t: TimeInterval)], Error>
+    private var byTime: [Int: String] = [:]
+    private var resumed = false
+    private var finishWork: DispatchWorkItem?
+    private let lock = NSLock()
+    var onTimeout: (() -> Void)?
+
+    init(_ cont: CheckedContinuation<[(text: String, t: TimeInterval)], Error>) { self.cont = cont }
+
+    func add(word: String, at t: TimeInterval) {
+        let w = word.trimmingCharacters(in: .whitespaces)
+        guard !w.isEmpty else { return }
+        lock.lock(); byTime[Int(t * 1000)] = w; lock.unlock()
+    }
+
+    /// Finish shortly after the last final result (debounced, since clips emit several).
+    func scheduleFinish() {
+        lock.lock(); finishWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.finish() }
+        finishWork = work; lock.unlock()
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.7, execute: work)
+    }
+
+    func armSafetyTimeout() {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 90) { [weak self] in
+            self?.onTimeout?(); self?.finish()
+        }
+    }
+
+    func finish() {
+        lock.lock()
+        if resumed { lock.unlock(); return }
+        resumed = true
+        let segs = byTime.keys.sorted().map { (text: byTime[$0]!, t: TimeInterval($0) / 1000.0) }
+        lock.unlock()
+        cont.resume(returning: segs)
+    }
+
+    func fail(_ error: Error) {
+        lock.lock()
+        if resumed { lock.unlock(); return }
+        resumed = true; lock.unlock()
+        cont.resume(throwing: error)
     }
 }

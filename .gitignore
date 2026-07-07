@@ -9,3 +9,4 @@ dist/
 
 # Built release artifact
 Snappilot.dmg
+*.md
