@@ -395,6 +395,16 @@ final class AppState: ObservableObject {
                              hasParticipants: true, hasYou: true, recordID: recordID)
     }
 
+    /// Transcribe a recording by its file URL (used from the video player). Finds the matching
+    /// library record so notes persist, then generates fresh meeting notes.
+    func transcribeRecording(url: URL, fallbackTitle: String) {
+        let record = library.records.first { library.fileURL(for: $0).path == url.path }
+        generateNotesForExisting(url: url,
+                                 title: record?.title ?? fallbackTitle,
+                                 date: record?.createdAt ?? Date(),
+                                 recordID: record?.id)
+    }
+
     /// Reopen already-generated notes instantly, or generate them if none exist yet.
     func openMeetingNotes(for record: CaptureRecord) {
         if let doc = library.loadNotes(for: record) {

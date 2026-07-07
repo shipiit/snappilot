@@ -81,6 +81,10 @@ struct VideoPreviewView: View {
                 Image(systemName: "video.fill").foregroundStyle(.secondary)
                 Text(title).font(.callout).lineLimit(1)
                 Spacer()
+                Button { AppState.shared.transcribeRecording(url: pc.url, fallbackTitle: title) } label: {
+                    Label("Notes", systemImage: "person.2.wave.2.fill")
+                }
+                .help("Transcribe this recording (on-device) and generate meeting notes")
                 Button { annotate() } label: { Label("Annotate", systemImage: "pencil.tip.crop.circle") }
                     .help("Draw on the video — baked in for the whole clip")
                 Button { trim() } label: { Label("Trim", systemImage: "scissors") }
