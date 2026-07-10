@@ -24,6 +24,14 @@
   <a href="https://github.com/shipiit/snappilot/releases/latest">
     <img alt="Latest release" src="https://img.shields.io/github/v/release/shipiit/snappilot?style=for-the-badge&color=555">
   </a>
+  &nbsp;
+  <a href="https://snappilot.vercel.app">
+    <img alt="Snappilot website" src="https://img.shields.io/badge/🌐%20Website-Explore%20Snappilot-6C63FF?style=for-the-badge">
+  </a>
+  &nbsp;
+  <a href="https://snappilot.vercel.app/docs">
+    <img alt="Snappilot documentation" src="https://img.shields.io/badge/📖%20Docs-Read%20the%20guide-222222?style=for-the-badge">
+  </a>
 </p>
 
 ---
@@ -49,6 +57,10 @@ annotate it in a Snagit-style editor, record it to a compact HEVC video (with a 
 bubble, mic and countdown), and pull selectable text out of anything with on-device OCR.
 Every capture auto-saves to a **searchable local library** — searchable even by the words
 *inside* your screenshots.
+
+Explore the interactive product experience at the **[Snappilot website](https://snappilot.vercel.app)**,
+or visit the **[complete documentation](https://snappilot.vercel.app/docs)** for installation,
+permissions, capture tools, recording, Meeting Mode, tasks, notes, architecture, and troubleshooting.
 
 ### Why Snappilot?
 
@@ -220,4 +232,3 @@ Apple Vision; recordings and captures never leave your Mac.
 ## 📄 License
 
 MIT.
-
