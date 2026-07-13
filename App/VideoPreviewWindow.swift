@@ -91,6 +91,8 @@ struct VideoPreviewView: View {
                     .help("Trim the start/end, then export the clip")
                 Button { exportGIF() } label: { Label("GIF", systemImage: "photo.stack") }
                     .help("Export as animated GIF")
+                Button { exportAudio() } label: { Label("Audio", systemImage: "waveform") }
+                    .help("Extract the audio track as an .m4a file")
                 Button { exportVideo(trimmed: false) } label: { Label("Export", systemImage: "square.and.arrow.down") }
                 Button { copyFile() } label: { Label("Copy", systemImage: "doc.on.doc") }
                 Button { NSWorkspace.shared.activateFileViewerSelecting([pc.url]) } label: {
@@ -152,6 +154,33 @@ struct VideoPreviewView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects([pc.url as NSURL])
         Toast.show("Copied video")
+    }
+
+    /// Extract the recording's audio into a standalone .m4a file.
+    private func exportAudio() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.mpeg4Audio]
+        panel.nameFieldStringValue = "\(title).m4a"
+        guard panel.runModal() == .OK, let dest = panel.url else { return }
+        Toast.show("Extracting audio…", symbol: "waveform")
+        let src = pc.url
+        Task {
+            let ok = await Self.extractAudio(from: src, to: dest)
+            Toast.show(ok ? "Audio saved" : "No audio track to export",
+                       symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            if ok { NSWorkspace.shared.activateFileViewerSelecting([dest]) }
+        }
+    }
+
+    private static func extractAudio(from src: URL, to dest: URL) async -> Bool {
+        let asset = AVURLAsset(url: src)
+        guard let tracks = try? await asset.loadTracks(withMediaType: .audio), !tracks.isEmpty else { return false }
+        try? FileManager.default.removeItem(at: dest)
+        guard let export = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else { return false }
+        export.outputURL = dest
+        export.outputFileType = .m4a
+        await export.export()
+        return export.status == .completed
     }
 
     private func exportGIF() {

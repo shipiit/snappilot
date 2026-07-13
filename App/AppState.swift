@@ -344,10 +344,13 @@ final class AppState: ObservableObject {
     func generateMeetingNotes(url: URL, title: String, date: Date,
                               hasParticipants: Bool, hasYou: Bool,
                               preLines: [TranscriptLine] = [], recordID: String? = nil) {
-        guard !generatingNotes else { return }
+        guard !generatingNotes else {
+            Toast.show("Already generating notes — please wait…", symbol: "hourglass")
+            return
+        }
         generatingNotes = true
         let usingCaptions = !preLines.isEmpty
-        Toast.show(usingCaptions ? "Building notes from Meet captions…" : "Transcribing meeting on-device…",
+        Toast.show(usingCaptions ? "Building notes from Meet captions…" : "Transcribing on-device — this can take a few minutes…",
                    symbol: usingCaptions ? "captions.bubble.fill" : "waveform")
         Task {
             do {
@@ -385,6 +388,12 @@ final class AppState: ObservableObject {
             } catch {
                 generatingNotes = false
                 Toast.show(error.localizedDescription, symbol: "exclamationmark.triangle.fill")
+                // If Speech Recognition permission is the blocker, open the right settings pane.
+                if case MeetingTranscribeError.notAuthorized = error {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
             }
         }
     }
