@@ -238,29 +238,51 @@ struct KanbanView: View {
 
     // MARK: Import from file
 
-    /// The import file format, as a ready-to-edit sample.
+    /// The import file format, as a ready-to-edit sample (simple + detailed).
     private static let sampleFormat = """
-    # Tasks
+    # Simple tasks (one line each)
 
     ## To do
-    - [ ] You: Prepare the demo
-    - [ ] Priya: Review the pull request
-    - Buy the domain name
-
-    ## In progress
-    - [ ] Sam: Build the landing page
-
-    ## Review
-    - [ ] QA the release build
+    - [ ] Prepare the demo
+    - Priya: Review the pull request
 
     ## Done
     - [x] Ship v0.1.8
 
-    # How this maps
-    # • Each "- " or "- [ ]" line becomes a task.
-    # • "- [x]" items go to the Done column.
-    # • A "## Column name" heading (To do / In progress / Review / Done) sets the column.
-    # • "Name: task" adds an owner. Plain lines work too.
+    # Detailed tasks (fields indented under each task)
+
+    - Implement the task detail page
+        status: In progress
+        owner: Rahul
+        priority: High
+        due: 2026-07-20
+        labels: frontend, ui
+        description: Build a clean, modern detail page with subtasks and comments.
+        subtasks:
+        - [x] Design layout
+        - [x] Build header
+        - [ ] Add comments feed
+        - [ ] Attachments viewer
+
+    - Fix the meeting transcription bug
+        owner: Rahul
+        priority: Urgent
+        due: 2026-07-18
+        labels: bug
+        subtasks:
+        - [ ] Repro on a long video
+        - [ ] Ship the fix
+
+    # Notes on the format:
+    # • A top-level "- " line starts a task (its text is the title).
+    # • Indent (spaces) the field lines under it:
+    #     status:      To do | In progress | Review | Done
+    #     owner:       any name          priority: None | Low | Medium | High | Urgent
+    #     due:         2026-07-20        labels:   comma, separated
+    #     description: free text
+    #     subtasks:    then indented "- [ ]" / "- [x]" lines
+    # • "- [x]" (with no fields) sends a simple task straight to Done.
+    # • A "## Column" heading sets the column for the simple tasks below it.
     """
 
     private func saveSampleFormat() {
@@ -288,42 +310,110 @@ struct KanbanView: View {
                    symbol: n > 0 ? "square.and.arrow.down" : "info.circle")
     }
 
-    /// Turn a Markdown / text checklist into tasks. Each list item becomes a task; `- [x]`
-    /// items land in Done; a heading that matches a column name (## In progress) sets the
-    /// status for the items beneath it.
+    /// Turn a Markdown / text file into tasks. Supports two levels:
+    /// • Simple — each `- ` / `- [ ]` line is a task; `- [x]` lands in Done; a `## Column`
+    ///   heading sets the column for the items beneath it.
+    /// • Detailed — under a task, indented `key: value` lines set fields (status, owner,
+    ///   priority, due, labels, description) and a `subtasks:` block adds subtasks.
     private func importTasks(from text: String) -> Int {
-        var status: TaskStatus = .todo
-        var count = 0
-        for raw in text.components(separatedBy: "\n") {
-            var line = raw.trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty else { continue }
+        var drafts: [TaskDraft] = []
+        var column: TaskStatus = .todo
+        var current: TaskDraft?
+        var inSubtasks = false
 
-            if line.hasPrefix("#") {
+        func flush() { if let d = current { drafts.append(d) }; current = nil; inSubtasks = false }
+
+        for raw in text.components(separatedBy: "\n") {
+            if raw.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            let indented = raw.first == " " || raw.first == "\t"
+            let line = raw.trimmingCharacters(in: .whitespaces)
+
+            // Column heading (top-level).
+            if !indented, line.hasPrefix("#") {
+                flush()
                 let heading = line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces).lowercased()
-                if let s = TaskStatus.allCases.first(where: { $0.title.lowercased() == heading }) { status = s }
+                if let s = TaskStatus.allCases.first(where: { $0.title.lowercased() == heading }) { column = s }
                 continue
             }
-            var done = false
-            let low = line.lowercased()
-            if low.hasPrefix("- [x]") || low.hasPrefix("* [x]") { done = true; line = String(line.dropFirst(5)) }
-            else if line.hasPrefix("- [ ]") || line.hasPrefix("* [ ]") { line = String(line.dropFirst(5)) }
-            else if line.hasPrefix("- ") || line.hasPrefix("* ") { line = String(line.dropFirst(2)) }
-            else if let r = line.range(of: #"^\d+\.\s"#, options: .regularExpression) { line.removeSubrange(r) }
 
-            line = line.replacingOccurrences(of: "**", with: "").trimmingCharacters(in: .whitespaces)
-            // Optional "Owner: task" prefix.
-            var owner: String? = nil
-            if let colon = line.firstIndex(of: ":"), line.distance(from: line.startIndex, to: colon) <= 20 {
-                let head = String(line[..<colon]).trimmingCharacters(in: .whitespaces)
+            // Indented field / subtask belonging to the current task.
+            if indented, current != nil {
+                if line.lowercased().hasPrefix("subtasks") { inSubtasks = true; continue }
+                if inSubtasks, line.hasPrefix("-") || line.hasPrefix("*") {
+                    var t = line.dropFirst()
+                    var sdone = false
+                    let l = t.trimmingCharacters(in: .whitespaces).lowercased()
+                    if l.hasPrefix("[x]") { sdone = true; t = t.trimmingCharacters(in: .whitespaces).dropFirst(3) }
+                    else if l.hasPrefix("[ ]") { t = t.trimmingCharacters(in: .whitespaces).dropFirst(3) }
+                    let title = t.trimmingCharacters(in: .whitespaces)
+                    if !title.isEmpty { current?.subtasks.append((title, sdone)) }
+                    continue
+                }
+                if let colon = line.firstIndex(of: ":") {
+                    let key = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
+                    let val = String(line[line.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+                    switch key {
+                    case "status": if let s = matchStatus(val) { current?.status = s }
+                    case "owner", "assignee": current?.owner = val
+                    case "priority": current?.priority = matchPriority(val)
+                    case "due", "due date", "deadline": current?.due = parseDate(val)
+                    case "labels", "tags": current?.labels = val.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                    case "description", "desc", "details": current?.details = val
+                    default: break
+                    }
+                    inSubtasks = false
+                }
+                continue
+            }
+
+            // Top-level task line.
+            flush()
+            var t = line
+            var done = false
+            let low = t.lowercased()
+            if low.hasPrefix("- [x]") || low.hasPrefix("* [x]") { done = true; t = String(t.dropFirst(5)) }
+            else if t.hasPrefix("- [ ]") || t.hasPrefix("* [ ]") { t = String(t.dropFirst(5)) }
+            else if t.hasPrefix("- ") || t.hasPrefix("* ") { t = String(t.dropFirst(2)) }
+            else if let r = t.range(of: #"^\d+\.\s"#, options: .regularExpression) { t.removeSubrange(r) }
+            t = t.replacingOccurrences(of: "**", with: "").trimmingCharacters(in: .whitespaces)
+
+            var owner: String?
+            if let colon = t.firstIndex(of: ":"), t.distance(from: t.startIndex, to: colon) <= 20 {
+                let head = String(t[..<colon]).trimmingCharacters(in: .whitespaces)
                 if head.split(separator: " ").count <= 2, !head.isEmpty {
-                    owner = head; line = String(line[line.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+                    owner = head; t = String(t[t.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
                 }
             }
-            guard line.count >= 2 else { continue }
-            library.createTask(title: line, status: done ? .done : status, owner: owner)
-            count += 1
+            guard t.count >= 2 else { continue }
+            current = TaskDraft(title: t, status: done ? .done : column, owner: owner)
         }
-        return count
+        flush()
+
+        for d in drafts {
+            let task = library.createTask(title: d.title, details: d.details, status: d.status,
+                                          priority: d.priority, owner: d.owner,
+                                          labels: d.labels.isEmpty ? nil : d.labels, due: d.due)
+            for (st, sdone) in d.subtasks {
+                library.addSubtask(task.id, title: st)
+                if sdone, let sub = library.task(task.id)?.subtaskList.last { library.toggleSubtask(task.id, subID: sub.id) }
+            }
+        }
+        return drafts.count
+    }
+
+    private func matchStatus(_ v: String) -> TaskStatus? {
+        TaskStatus.allCases.first { $0.title.lowercased() == v.lowercased() || $0.rawValue.lowercased() == v.lowercased() }
+    }
+    private func matchPriority(_ v: String) -> TaskPriority {
+        TaskPriority.allCases.first { $0.title.lowercased() == v.lowercased() || $0.rawValue.lowercased() == v.lowercased() } ?? .none
+    }
+    private func parseDate(_ v: String) -> Date? {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
+        for fmt in ["yyyy-MM-dd", "yyyy/MM/dd", "dd MMM yyyy", "MMM d, yyyy"] {
+            f.dateFormat = fmt
+            if let d = f.date(from: v) { return d }
+        }
+        return nil
     }
 
     // MARK: Export
@@ -364,5 +454,20 @@ struct KanbanView: View {
             .map { ($0.owner?.isEmpty == false ? "\($0.owner!): " : "") + $0.title }
         guard !open.isEmpty else { Toast.show("No open tasks to add", symbol: "checklist"); return }
         TaskExporter.addToReminders(open)
+    }
+}
+
+/// A task being assembled while parsing an import file.
+private struct TaskDraft {
+    var title: String
+    var details = ""
+    var status: TaskStatus
+    var priority: TaskPriority = .none
+    var owner: String?
+    var labels: [String] = []
+    var due: Date?
+    var subtasks: [(String, Bool)] = []
+    init(title: String, status: TaskStatus, owner: String? = nil) {
+        self.title = title; self.status = status; self.owner = owner
     }
 }
