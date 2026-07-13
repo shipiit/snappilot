@@ -39,8 +39,12 @@ struct KanbanView: View {
                 }
                 Spacer()
                 Button { let n = library.importMeetingActionItems()
-                    Toast.show(n > 0 ? "Imported \(n) task\(n == 1 ? "" : "s")" : "No new meeting tasks", symbol: "square.and.arrow.down")
-                } label: { Label("Import", systemImage: "square.and.arrow.down") }.buttonStyle(.bordered)
+                    Toast.show(n > 0 ? "Imported \(n) task\(n == 1 ? "" : "s") from meetings"
+                                     : "No meeting action items to import. Record a meeting (Record Meeting), then generate its notes.",
+                               symbol: n > 0 ? "square.and.arrow.down" : "info.circle")
+                } label: { Label("Import from meetings", systemImage: "square.and.arrow.down") }
+                    .buttonStyle(.bordered)
+                    .help("Pull action items from your meeting recordings' notes into the board")
                 Menu {
                     Button("Copy checklist") { copyTasks() }
                     Button("Export .md") { exportTasks() }
