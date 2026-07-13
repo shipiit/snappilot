@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import SnapCore
+import UniformTypeIdentifiers
 
 /// A Linear-style task board: columns per status, colored issue-key chips, priority,
 /// subtask progress, assignee avatars, and drag-to-change-status.
@@ -38,13 +39,19 @@ struct KanbanView: View {
                     Text("Track and manage work across the board").font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { let n = library.importMeetingActionItems()
-                    Toast.show(n > 0 ? "Imported \(n) task\(n == 1 ? "" : "s") from meetings"
-                                     : "No meeting action items to import. Record a meeting (Record Meeting), then generate its notes.",
-                               symbol: n > 0 ? "square.and.arrow.down" : "info.circle")
-                } label: { Label("Import from meetings", systemImage: "square.and.arrow.down") }
-                    .buttonStyle(.bordered)
-                    .help("Pull action items from your meeting recordings' notes into the board")
+                Menu {
+                    Button("From meetings") {
+                        let n = library.importMeetingActionItems()
+                        Toast.show(n > 0 ? "Imported \(n) task\(n == 1 ? "" : "s") from meetings"
+                                         : "No meeting action items yet — record a meeting, then generate its notes.",
+                                   symbol: n > 0 ? "square.and.arrow.down" : "info.circle")
+                    }
+                    Button("From file… (Markdown / text)") { importFromFile() }
+                    Divider()
+                    Button("Save a sample format…") { saveSampleFormat() }
+                } label: { Label("Import", systemImage: "square.and.arrow.down") }
+                    .fixedSize()
+                    .help("Import tasks from your meetings, or upload a Markdown / text checklist")
                 Menu {
                     Button("Copy checklist") { copyTasks() }
                     Button("Export .md") { exportTasks() }
@@ -227,6 +234,96 @@ struct KanbanView: View {
         .padding(.vertical, 8)
         .contentShape(Rectangle())
         .onTapGesture { TaskDetailWindowController.present(taskID: task.id, library: library) }
+    }
+
+    // MARK: Import from file
+
+    /// The import file format, as a ready-to-edit sample.
+    private static let sampleFormat = """
+    # Tasks
+
+    ## To do
+    - [ ] You: Prepare the demo
+    - [ ] Priya: Review the pull request
+    - Buy the domain name
+
+    ## In progress
+    - [ ] Sam: Build the landing page
+
+    ## Review
+    - [ ] QA the release build
+
+    ## Done
+    - [x] Ship v0.1.8
+
+    # How this maps
+    # • Each "- " or "- [ ]" line becomes a task.
+    # • "- [x]" items go to the Done column.
+    # • A "## Column name" heading (To do / In progress / Review / Done) sets the column.
+    # • "Name: task" adds an owner. Plain lines work too.
+    """
+
+    private func saveSampleFormat() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "sample-tasks.md"
+        panel.allowedContentTypes = [.plainText]
+        if panel.runModal() == .OK, let url = panel.url {
+            try? Self.sampleFormat.write(to: url, atomically: true, encoding: .utf8)
+            Toast.show("Saved sample-tasks.md — edit it, then Import › From file", symbol: "doc.text")
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+    }
+
+    private func importFromFile() {
+        let panel = NSOpenPanel()
+        var types: [UTType] = [.plainText, .text]
+        if let md = UTType(filenameExtension: "md") { types.append(md) }
+        panel.allowedContentTypes = types
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let n = importTasks(from: text)
+        Toast.show(n > 0 ? "Imported \(n) task\(n == 1 ? "" : "s") from file"
+                         : "No tasks found in that file",
+                   symbol: n > 0 ? "square.and.arrow.down" : "info.circle")
+    }
+
+    /// Turn a Markdown / text checklist into tasks. Each list item becomes a task; `- [x]`
+    /// items land in Done; a heading that matches a column name (## In progress) sets the
+    /// status for the items beneath it.
+    private func importTasks(from text: String) -> Int {
+        var status: TaskStatus = .todo
+        var count = 0
+        for raw in text.components(separatedBy: "\n") {
+            var line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+
+            if line.hasPrefix("#") {
+                let heading = line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces).lowercased()
+                if let s = TaskStatus.allCases.first(where: { $0.title.lowercased() == heading }) { status = s }
+                continue
+            }
+            var done = false
+            let low = line.lowercased()
+            if low.hasPrefix("- [x]") || low.hasPrefix("* [x]") { done = true; line = String(line.dropFirst(5)) }
+            else if line.hasPrefix("- [ ]") || line.hasPrefix("* [ ]") { line = String(line.dropFirst(5)) }
+            else if line.hasPrefix("- ") || line.hasPrefix("* ") { line = String(line.dropFirst(2)) }
+            else if let r = line.range(of: #"^\d+\.\s"#, options: .regularExpression) { line.removeSubrange(r) }
+
+            line = line.replacingOccurrences(of: "**", with: "").trimmingCharacters(in: .whitespaces)
+            // Optional "Owner: task" prefix.
+            var owner: String? = nil
+            if let colon = line.firstIndex(of: ":"), line.distance(from: line.startIndex, to: colon) <= 20 {
+                let head = String(line[..<colon]).trimmingCharacters(in: .whitespaces)
+                if head.split(separator: " ").count <= 2, !head.isEmpty {
+                    owner = head; line = String(line[line.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
+                }
+            }
+            guard line.count >= 2 else { continue }
+            library.createTask(title: line, status: done ? .done : status, owner: owner)
+            count += 1
+        }
+        return count
     }
 
     // MARK: Export
