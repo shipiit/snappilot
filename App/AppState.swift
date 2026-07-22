@@ -113,6 +113,7 @@ final class AppState: ObservableObject {
     func captureWindow() { withCaptureDelay { self.captureWindowNow() } }
 
     private func captureWindowNow() {
+        guard !RegionSelector.isPresenting else { return }   // ignore duplicate triggers
         hideOwnWindows()
         selector = RegionSelector()
         selector?.present(mode: .window) { [weak self] outcome in
@@ -165,6 +166,7 @@ final class AppState: ObservableObject {
 
     /// Record a region the user drags out.
     func recordRegion() {
+        guard !RegionSelector.isPresenting else { return }   // ignore duplicate triggers
         hideOwnWindows()
         selector = RegionSelector()
         selector?.present(mode: .region) { [weak self] outcome in
@@ -440,6 +442,7 @@ final class AppState: ObservableObject {
 
     /// Scrolling capture: drag out a region, then auto-scroll + stitch into one tall image.
     func scrollingCapture() {
+        guard !RegionSelector.isPresenting else { return }   // ignore duplicate triggers
         hideOwnWindows()
         selector = RegionSelector()
         selector?.present(mode: .region) { [weak self] outcome in
@@ -472,6 +475,7 @@ final class AppState: ObservableObject {
     // MARK: Helpers
 
     private func runRegion(_ handler: @escaping (CaptureResult) -> Void) {
+        guard !RegionSelector.isPresenting else { return }   // ignore duplicate triggers
         hideOwnWindows()
         selector = RegionSelector()
         selector?.present(mode: .region) { [weak self] outcome in

@@ -22,7 +22,12 @@ final class RegionSelector {
     private var keyMonitor: Any?
     private static var current: RegionSelector?
 
+    /// True while a selection overlay is on screen — used to ignore duplicate triggers so
+    /// we never stack two overlays (which would orphan the first and block the mouse).
+    static var isPresenting: Bool { current != nil }
+
     func present(mode: SelectorMode, completion: @escaping (SelectorResult) -> Void) {
+        RegionSelector.current?.finish(.cancelled)   // never leave a previous overlay orphaned
         self.completion = completion
         RegionSelector.current = self
 
