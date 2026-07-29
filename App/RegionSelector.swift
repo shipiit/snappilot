@@ -31,12 +31,17 @@ final class RegionSelector {
         self.completion = completion
         RegionSelector.current = self
 
-        NSApp.activate(ignoringOtherApps: true)
+        // Deliberately do NOT call NSApp.activate — activating would switch away from a native
+        // full-screen Space and dismiss any open menu. The non-activating panels still receive
+        // clicks and keys (Esc) because they can become key without activating the app.
         for screen in NSScreen.screens {
             let w = OverlayWindow(screen: screen, mode: mode, selector: self)
             windows.append(w)
-            w.makeKeyAndOrderFront(nil)
+            w.orderFrontRegardless()
         }
+        // Make the panel under the pointer key so the Esc / F / M keys are delivered to us.
+        let mouse = NSEvent.mouseLocation
+        (windows.first { NSMouseInRect(mouse, $0.frame, false) } ?? windows.first)?.makeKeyAndOrderFront(nil)
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKey(event) == true ? nil : event
         }
@@ -102,11 +107,17 @@ final class RegionSelector {
     }
 }
 
-final class OverlayWindow: NSWindow {
+/// A non-activating panel: it can receive clicks/keys and float above everything (including
+/// native full-screen Spaces) WITHOUT activating Snappilot — so triggering a capture doesn't
+/// switch Spaces away from a full-screen app or dismiss an open menu.
+final class OverlayWindow: NSPanel {
     init(screen: NSScreen, mode: SelectorMode, selector: RegionSelector) {
-        super.init(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        super.init(contentRect: screen.frame, styleMask: [.borderless, .nonactivatingPanel],
+                   backing: .buffered, defer: false)
         setFrame(screen.frame, display: true)
         level = .screenSaver
+        isFloatingPanel = true
+        hidesOnDeactivate = false
         backgroundColor = .clear
         isOpaque = false
         hasShadow = false
@@ -116,6 +127,7 @@ final class OverlayWindow: NSWindow {
                                   screen: screen, mode: mode, selector: selector)
     }
     override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
 }
 
 final class OverlayView: NSView {
