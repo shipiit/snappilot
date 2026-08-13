@@ -8,10 +8,11 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             general.tabItem { Label("General", systemImage: "gearshape") }
+            presets.tabItem { Label("Presets", systemImage: "slider.horizontal.3") }
             shortcuts.tabItem { Label("Shortcuts", systemImage: "keyboard") }
             about.tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 460, height: 300)
+        .frame(width: 560, height: 430)
     }
 
     private var general: some View {
@@ -61,6 +62,46 @@ struct SettingsView: View {
                 Button("Reset to defaults") { hotkeys.resetToDefaults() }.font(.caption)
             }
             .padding(.horizontal, 16).padding(.vertical, 8)
+        }
+    }
+
+    private var presets: some View {
+        VStack(spacing: 0) {
+            List {
+                ForEach($app.capturePresets) { $preset in
+                    VStack(alignment: .leading, spacing: 9) {
+                        HStack {
+                            TextField("Preset name", text: $preset.name).font(.headline)
+                            Picker("", selection: $preset.action) {
+                                ForEach(CapturePresetAction.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
+                            }.labelsHidden().frame(width: 170)
+                            Button(role: .destructive) {
+                                app.capturePresets.removeAll { $0.id == preset.id }; app.saveCapturePresets()
+                            } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
+                        }
+                        HStack(spacing: 16) {
+                            Picker("Delay", selection: $preset.delay) {
+                                Text("Off").tag(0); Text("3 sec").tag(3); Text("5 sec").tag(5); Text("10 sec").tag(10)
+                            }.frame(width: 130)
+                            if preset.action == .recordRegion || preset.action == .recordScreen {
+                                Toggle("Microphone", isOn: $preset.recordMic)
+                                Toggle("Webcam", isOn: $preset.recordCamera)
+                            }
+                        }.font(.caption)
+                    }
+                    .padding(.vertical, 6)
+                    .onChange(of: preset) { app.saveCapturePresets() }
+                }
+            }
+            HStack {
+                Text("Presets remember capture mode, delay, microphone, and webcam.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button { app.capturePresets.append(CapturePreset(name: "New preset", action: .region)); app.saveCapturePresets() } label: {
+                    Label("Add Preset", systemImage: "plus")
+                }
+                Button("Restore Defaults") { app.capturePresets = CapturePreset.defaults; app.saveCapturePresets() }
+            }.padding(12)
         }
     }
 

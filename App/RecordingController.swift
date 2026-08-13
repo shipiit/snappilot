@@ -3,6 +3,11 @@ import AVFoundation
 import AppKit
 import SnapCore
 
+private final class SendableSampleBuffer: @unchecked Sendable {
+    let value: CMSampleBuffer
+    init(_ value: CMSampleBuffer) { self.value = value }
+}
+
 /// Recording quality — trades file size against sharpness.
 enum RecordQuality: String, CaseIterable, Codable {
     case small, balanced, high
@@ -127,10 +132,11 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
             do {
                 try mic.start { [weak self] sb in
                     guard let self else { return }
+                    let sample = SendableSampleBuffer(sb)
                     self.queue.async {
                         guard self.started, !self.paused, !self.finishing,
                               let input = self.micInput, input.isReadyForMoreMediaData else { return }
-                        input.append(self.shiftedByPause(sb) ?? sb)
+                        input.append(self.shiftedByPause(sample.value) ?? sample.value)
                     }
                 }
                 voiceMic = mic
@@ -243,8 +249,9 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
             // Stop the stream first, then finalize the writer on our serial queue so it
             // never races with an in-flight sample append (which would crash).
             if let stream {
-                stream.stopCapture { [weak self] _ in
-                    self?.queue.async { self?.finishRecording() }
+                let controller = self
+                stream.stopCapture { _ in
+                    controller.queue.async { controller.finishRecording() }
                 }
             } else {
                 self.finishRecording()
@@ -265,7 +272,7 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
         micInput?.markAsFinished()
         writer.finishWriting { [weak self] in
             guard let self else { return }
-            let url = writer.status == .completed ? self.outputURL : nil
+            let url = self.writer?.status == .completed ? self.outputURL : nil
             self.report(url)
             self.queue.async { self.reset() }
         }

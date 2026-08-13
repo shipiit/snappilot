@@ -102,7 +102,9 @@ permissions, capture tools, recording, Meeting Mode, tasks, notes, architecture,
 ### Capture
 - 🟦 **Region** · 🪟 **Window** · 🖥️ **Full Screen** — a crisp crosshair overlay with a
   **live magnifier loupe**, pixel dimensions, and keyboard hints.
-- ⏱️ **Delay timer** — 3s/5s countdown before a screenshot.
+- ⏱️ **Optional delay** — off captures immediately; turn it on for a 3s or 5s countdown.
+- 🧩 Compact, responsive **Quick Capture** tiles keep capture and recording actions visible
+  without oversized cards; editing actions stay in the sidebar and Recent Captures.
 - ⌨️ **Global shortcuts** — trigger any capture from anywhere. Fully **customizable**.
 - 🫥 Snappilot **hides itself** during capture so it never lands in your shot.
 
@@ -116,10 +118,19 @@ permissions, capture tools, recording, Meeting Mode, tasks, notes, architecture,
   arrow heads, fills, colors)
 - 🎚️ Tool properties: custom color, thickness, opacity, arrow **start/end/size**
 - ↩️ Non-destructive layers, undo/redo, move & edit anything
+- ✏️ **Annotate Again** — reopen any image from Recent Captures and save changes back to
+  the same library item; also available as **Capture → Annotate Latest Image** in the macOS menu bar
+- 🖼️ Drag screenshots, logos, or other images onto the canvas as movable, scalable overlays
+- 🕘 Snagit-style **Recent** tray inside the editor—click or drag older captures onto the canvas
+- 📐 Interactive corner resizing, exact width/height, aspect lock, replace, rotate, flip,
+  fit-to-canvas, opacity, layer ordering, duplication, and overlay background removal
+- ✨ Smart Move · editable OCR regions · Spotlight · Magnify · local Simplify · background removal/blur
+- 📤 Native macOS sharing via AirDrop, Messages, Mail, and installed sharing/storage extensions
 
 ### Record
 - 🎥 Record a **region or the full screen** → compact **HEVC MP4** (Small / Balanced / High quality)
 - 🔊 System audio · 🎙️ Microphone · 📷 **Webcam overlay** · 🖱️ cursor — all optional
+- 🎭 Live local webcam background effects: none, background blur, or studio background
 - 🎙️ **Microphone noise cancellation** — voice-processed mic (noise suppression + echo cancellation)
 - ⏸️ **Pause / Resume** — the paused span is stitched out cleanly
 - ⏱️ **"Ready to Record"** panel + **3·2·1 countdown** (outside the frame) + a live **frame indicator**
@@ -127,7 +138,8 @@ permissions, capture tools, recording, Meeting Mode, tasks, notes, architecture,
   captured into the video. Ink **auto-fades** when you stop, Google-Meet style (press `Esc` to exit).
 - 📸 **Screenshot while recording** — grab a still without stopping the recording
 - ▶️ Recordings open in Snappilot's **own player** — never QuickTime — with **Trim**,
-  **Annotate** (draw on a frame, baked over the whole clip), and **GIF export**
+  **timed video annotation** (whole clip, five-second moment, current-to-end, or trim range),
+  imported image overlays, frame export, clip combining, playback speed, and **GIF export**
 
 ### 🧠 Meeting Mode (on-device AI)
 - 🎙️ **Record a call** (Google Meet / Zoom) and get an automatic **transcript** — all processed
@@ -158,7 +170,7 @@ permissions, capture tools, recording, Meeting Mode, tasks, notes, architecture,
 ### OCR & Library
 - 🔤 **Grab Text** — extract selectable text from any region via Apple Vision
 - 🗂️ Every capture **auto-saves** to a local library, **searchable by the text inside it**
-- ⭐ Favorites · 📋 copy · 🗑️ delete · 🔎 instant search · 💾 live **storage usage** in the sidebar
+- ⭐ Favorites · ✏️ annotate again · 📋 copy · 🗑️ delete · 🔎 instant search · 💾 live **storage usage** in the sidebar
 
 ### Design
 - 🌗 Full **light & dark** theme support (follows your system)
@@ -202,8 +214,9 @@ through clean value types.
 
 ## 🗺️ Roadmap
 
-**Shipped:** ✅ Meeting Mode · ✅ Scrolling capture · ✅ Collections & tags · ✅ PDF export ·
-✅ Pause/Resume · ✅ Noise cancellation · ✅ Task board · ✅ Notes workspace
+**Shipped:** ✅ Meeting Mode · ✅ Scrolling capture · ✅ Step Recorder · ✅ Smart Move ·
+✅ Editable OCR · ✅ Background removal · ✅ Collections & tags · ✅ PDF/batch export ·
+✅ Clip combining · ✅ Pause/Resume · ✅ Noise cancellation · ✅ Task board · ✅ Notes workspace
 
 **Next:**
 - Timeline view + Filter / Sort / Group on the task board

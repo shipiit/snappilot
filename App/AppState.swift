@@ -12,6 +12,50 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     var symbol: String { self == .system ? "circle.lefthalf.filled" : self == .light ? "sun.max" : "moon" }
 }
 
+/// A reusable capture recipe, similar to Snagit's custom capture presets.
+enum CapturePresetAction: String, CaseIterable, Codable, Identifiable {
+    case region, window, fullScreen, text, scrolling, recordRegion, recordScreen
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .region: return "Region"
+        case .window: return "Window"
+        case .fullScreen: return "Full Screen"
+        case .text: return "Grab Text (OCR)"
+        case .scrolling: return "Scrolling Capture"
+        case .recordRegion: return "Record Region"
+        case .recordScreen: return "Record Screen"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .region: return "crop"
+        case .window: return "macwindow"
+        case .fullScreen: return "display"
+        case .text: return "text.viewfinder"
+        case .scrolling: return "arrow.down.doc"
+        case .recordRegion: return "record.circle"
+        case .recordScreen: return "rectangle.badge.record"
+        }
+    }
+}
+
+struct CapturePreset: Identifiable, Codable, Equatable {
+    var id = UUID().uuidString
+    var name: String
+    var action: CapturePresetAction
+    var delay: Int = 0
+    var recordMic: Bool = false
+    var recordCamera: Bool = false
+
+    static let defaults: [CapturePreset] = [
+        CapturePreset(name: "Quick region", action: .region),
+        CapturePreset(name: "Documentation shot", action: .region, delay: 3),
+        CapturePreset(name: "Text to clipboard", action: .text),
+        CapturePreset(name: "Screen demo", action: .recordScreen, recordMic: true),
+    ]
+}
+
 @MainActor
 final class AppState: ObservableObject {
     static let shared = AppState()
@@ -23,12 +67,15 @@ final class AppState: ObservableObject {
     @Published var recordMic = false
     @Published var recordNoiseCancellation = true
     @Published var recordCamera = false
+    @Published var recordWebcamEffect: WebcamBackgroundEffect = .none
     @Published var recordCursor = true
     @Published var recordCursorHighlight = false
     @Published var recordCountdown = true
     @Published var recordQuality: RecordQuality = .balanced
     @Published var captureDelay = 0        // seconds before a screenshot (0 = none)
+    @Published var capturePresets: [CapturePreset] = []
     @Published var isRecording = false
+    @Published var isStepRecording = false
     @Published var isPaused = false
     @Published var generatingNotes = false
     @Published var selectedNoteID: String?
@@ -37,6 +84,38 @@ final class AppState: ObservableObject {
         didSet {
             UserDefaults.standard.set(appearance.rawValue, forKey: "appearanceMode")
             applyAppearance()
+        }
+    }
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: "capturePresets.v1"),
+           let saved = try? JSONDecoder().decode([CapturePreset].self, from: data), !saved.isEmpty {
+            capturePresets = saved
+        } else {
+            capturePresets = CapturePreset.defaults
+        }
+    }
+
+    func saveCapturePresets() {
+        if let data = try? JSONEncoder().encode(capturePresets) {
+            UserDefaults.standard.set(data, forKey: "capturePresets.v1")
+        }
+    }
+
+    func runPreset(_ preset: CapturePreset) {
+        let previousDelay = captureDelay
+        captureDelay = preset.delay
+        defer { captureDelay = previousDelay } // preset delay is one-shot
+        recordMic = preset.recordMic
+        recordCamera = preset.recordCamera
+        switch preset.action {
+        case .region: captureRegion()
+        case .window: captureWindow()
+        case .fullScreen: captureFullScreen()
+        case .text: grabText()
+        case .scrolling: scrollingCapture()
+        case .recordRegion: recordRegion()
+        case .recordScreen: recordScreen()
         }
     }
 
@@ -139,6 +218,38 @@ final class AppState: ObservableObject {
     /// Grab text: select a region, OCR it, copy to clipboard.
     func grabText() { withCaptureDelay { self.grabTextNow() } }
 
+    func captureWebcamPhoto() {
+        Toast.show("Capturing webcam photo…", symbol: "camera.fill")
+        WebcamPhotoCapture.shared.capture { [weak self] image in
+            guard let self, let image else {
+                Toast.show("Couldn't capture webcam photo", symbol: "video.slash.fill"); return
+            }
+            let selection = CaptureSelection(rect: CGRect(x: 0, y: 0, width: image.width, height: image.height),
+                                             displayID: 0, scale: 1)
+            self.openEditor(with: CaptureResult(image: image, selection: selection))
+        }
+    }
+
+    func startStepRecorder() {
+        guard !isStepRecording else { StepRecorder.shared.stop(); return }
+        if !ScrollCaptureController.accessibilityTrusted() {
+            Toast.show("Allow Accessibility so Step Recorder can detect clicks", symbol: "hand.raised.fill")
+            ScrollCaptureController.promptAccessibility()
+        }
+        hideOwnWindows(); isStepRecording = true
+        StepRecorder.shared.start { [weak self] guide in
+            guard let self else { return }
+            self.isStepRecording = false
+            guard let guide else {
+                self.restoreOwnWindows(); Toast.show("No steps captured", symbol: "number.square"); return
+            }
+            let selection = CaptureSelection(rect: CGRect(x: 0, y: 0, width: guide.width, height: guide.height),
+                                             displayID: 0, scale: 1)
+            self.openEditor(with: CaptureResult(image: guide, selection: selection))
+            Toast.show("Step guide ready", symbol: "list.number")
+        }
+    }
+
     private func grabTextNow() {
         runRegion { result in
             Task {
@@ -225,7 +336,7 @@ final class AppState: ObservableObject {
             if recordCamera {
                 switch await AppState.access(.video) {
                 case .granted:
-                    WebcamOverlay.shared.show(in: globalRect)
+                    WebcamOverlay.shared.show(in: globalRect, effect: recordWebcamEffect)
                 case .denied:
                     recordCamera = false
                     Toast.show("Camera access is off — opening Settings so you can allow it",
@@ -509,4 +620,55 @@ final class AppState: ObservableObject {
         }
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    /// Reopen a saved library image in the annotation editor. Saving updates the same
+    /// capture instead of creating a duplicate record.
+    func annotateAgain(_ record: CaptureRecord) {
+        guard record.kind == .image,
+              let image = NSImage(contentsOf: library.fileURL(for: record)),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            Toast.show("Couldn't open this capture", symbol: "exclamationmark.triangle.fill")
+            return
+        }
+        if let editor {
+            editor.load(image: cgImage, recordID: record.id)
+        } else {
+            let controller = EditorWindowController(image: cgImage, appState: self, recordID: record.id)
+            controller.onClose = { [weak self] _ in self?.editor = nil }
+            editor = controller
+            controller.showWindow(nil)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func annotateLatestImage() {
+        guard let record = library.records.first(where: { $0.kind == .image }) else {
+            Toast.show("No image captures yet", symbol: "photo")
+            return
+        }
+        annotateAgain(record)
+    }
+
+    func shareLatestCapture() {
+        guard let record = library.records.first else {
+            Toast.show("No captures yet", symbol: "square.and.arrow.up"); return
+        }
+        SystemShare.file(library.fileURL(for: record))
+    }
+
+    func selectEditorTool(_ tool: Tool?) {
+        guard editor != nil else {
+            Toast.show("Open or capture an image first", symbol: "pencil.and.outline"); return
+        }
+        if let tool {
+            NotificationCenter.default.post(name: .snappilotSelectTool, object: tool.rawValue)
+        } else {
+            NotificationCenter.default.post(name: .snappilotSelectMode, object: nil)
+        }
+        editor?.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func undoEditor() { editor?.undo() }
+    func redoEditor() { editor?.redo() }
 }

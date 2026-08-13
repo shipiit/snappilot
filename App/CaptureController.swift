@@ -81,6 +81,28 @@ enum CaptureController {
         return CaptureResult(image: image, selection: sel)
     }
 
+    /// Full-display capture that excludes Snappilot's own windows. Used by Step Recorder
+    /// so its floating Stop control never appears in the generated guide.
+    static func captureFullScreenExcludingApp(at point: CGPoint) async throws -> CaptureResult {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(point, $0.frame, false) }) ?? NSScreen.main,
+              let display = content.displays.first(where: { $0.displayID == screenNumber(screen) }) ?? content.displays.first else {
+            throw CaptureError.noDisplay
+        }
+        let ownBundle = Bundle.main.bundleIdentifier
+        let excluded = content.applications.filter { $0.bundleIdentifier == ownBundle }
+        let filter = SCContentFilter(display: display, excludingApplications: excluded, exceptingWindows: [])
+        let config = SCStreamConfiguration()
+        let scale = scale(for: display.displayID)
+        config.width = Int(CGFloat(display.width) * scale)
+        config.height = Int(CGFloat(display.height) * scale)
+        config.showsCursor = false; config.captureResolution = .best
+        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+        let selection = CaptureSelection(rect: CGRect(x: 0, y: 0, width: display.width, height: display.height),
+                                         displayID: display.displayID, scale: scale)
+        return CaptureResult(image: image, selection: selection)
+    }
+
     /// Region capture: `rectInScreen` is in the screen's local points, bottom-left origin.
     static func captureRegion(_ rectInScreen: CGRect, on screen: NSScreen) async throws -> CaptureResult {
         // Let the selection overlay fully vanish so it isn't captured.

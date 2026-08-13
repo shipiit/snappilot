@@ -73,8 +73,35 @@ final class RegionSelector {
             windows.forEach { ($0.contentView as? OverlayView)?.magnifierEnabled.toggle() }
             windows.forEach { $0.contentView?.needsDisplay = true }
             return true
+        case 2:                                                      // D — exact dimensions
+            promptExactDimensions()
+            return true
         default: return false
         }
+    }
+
+    private func promptExactDimensions() {
+        let alert = NSAlert()
+        alert.messageText = "Exact capture dimensions"
+        alert.informativeText = "Enter the required pixel size. The region will be centered under the pointer."
+        let width = NSTextField(string: "1280"), height = NSTextField(string: "720")
+        width.placeholderString = "Width"; height.placeholderString = "Height"
+        let fields = NSStackView(views: [width, NSTextField(labelWithString: "×"), height])
+        fields.orientation = .horizontal; fields.spacing = 8
+        width.frame.size.width = 100; height.frame.size.width = 100
+        alert.accessoryView = fields
+        alert.addButton(withTitle: "Capture"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn,
+              let pixelWidth = Double(width.stringValue), let pixelHeight = Double(height.stringValue),
+              pixelWidth >= 4, pixelHeight >= 4 else { return }
+        let pointer = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(pointer, $0.frame, false) }) ?? NSScreen.main else { return }
+        let size = CGSize(width: min(screen.frame.width, pixelWidth / screen.backingScaleFactor),
+                          height: min(screen.frame.height, pixelHeight / screen.backingScaleFactor))
+        let local = CGPoint(x: pointer.x - screen.frame.minX, y: pointer.y - screen.frame.minY)
+        let origin = CGPoint(x: min(max(0, local.x - size.width / 2), screen.frame.width - size.width),
+                             y: min(max(0, local.y - size.height / 2), screen.frame.height - size.height))
+        finish(.region(screen, CGRect(origin: origin, size: size)))
     }
 
     func finish(_ result: SelectorResult) {
@@ -268,6 +295,7 @@ final class OverlayView: NSView {
             ("Esc", "cancel capture"),
             ("F", "capture full screen"),
             ("M", "toggle magnifier"),
+            ("D", "exact dimensions"),
             ("Drag", "select a region"),
         ]
         let keyFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)

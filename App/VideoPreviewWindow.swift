@@ -24,8 +24,10 @@ final class PlayerController: ObservableObject {
 
     var canTrim: Bool { playerView.canBeginTrimming }
 
-    func beginTrim(_ done: @escaping (Bool) -> Void) {
-        playerView.beginTrimming { result in done(result == .okButton) }
+    func beginTrim(_ done: @escaping @MainActor @Sendable (Bool) -> Void) {
+        playerView.beginTrimming { result in
+            Task { @MainActor in done(result == .okButton) }
+        }
     }
 
     /// The user-chosen trim range, if any (set by the native trimming UI).
@@ -39,10 +41,7 @@ final class PlayerController: ObservableObject {
     /// Re-encode `range` (or the whole clip) to `dest`. Returns true on success.
     func export(range: CMTimeRange?, to dest: URL) async -> Bool {
         let asset = AVURLAsset(url: url)
-        let preset = AVAssetExportSession.exportPresets(compatibleWith: asset)
-            .contains(AVAssetExportPresetHEVCHighestQuality) ? AVAssetExportPresetHEVCHighestQuality
-                                                             : AVAssetExportPresetHighestQuality
-        guard let session = AVAssetExportSession(asset: asset, presetName: preset) else { return false }
+        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else { return false }
         try? FileManager.default.removeItem(at: dest)
         session.outputURL = dest
         session.outputFileType = .mp4
@@ -81,22 +80,42 @@ struct VideoPreviewView: View {
                 Image(systemName: "video.fill").foregroundStyle(.secondary)
                 Text(title).font(.callout).lineLimit(1)
                 Spacer()
-                Button { AppState.shared.transcribeRecording(url: pc.url, fallbackTitle: title) } label: {
-                    Label("Notes", systemImage: "person.2.wave.2.fill")
-                }
-                .help("Transcribe this recording (on-device) and generate meeting notes")
-                Button { annotate() } label: { Label("Annotate", systemImage: "pencil.tip.crop.circle") }
-                    .help("Draw on the video — baked in for the whole clip")
+                Button { exportFrame() } label: { Label("Frame", systemImage: "photo") }
+                    .help("Save the current video frame as an image")
+                Menu {
+                    Button("Whole Video", systemImage: "rectangle.inset.filled") { annotate(range: nil) }
+                    Button("Current Moment · 5 seconds", systemImage: "scope") { annotate(range: momentRange()) }
+                    Button("From Current Time to End", systemImage: "forward.end") { annotate(range: remainingRange()) }
+                    if let range = pc.trimmedRange() {
+                        Button("Selected Trim Range", systemImage: "selection.pin.in.out") { annotate(range: range) }
+                    }
+                } label: { Label("Annotate", systemImage: "pencil.tip.crop.circle") }
+                .help("Add drawings, text, callouts, blur, or image overlays for a chosen time range")
                 Button { trim() } label: { Label("Trim", systemImage: "scissors") }
                     .help("Trim the start/end, then export the clip")
-                Button { exportGIF() } label: { Label("GIF", systemImage: "photo.stack") }
-                    .help("Export as animated GIF")
-                Button { exportAudio() } label: { Label("Audio", systemImage: "waveform") }
-                    .help("Extract the audio track as an .m4a file")
-                Button { exportVideo(trimmed: false) } label: { Label("Export", systemImage: "square.and.arrow.down") }
-                Button { copyFile() } label: { Label("Copy", systemImage: "doc.on.doc") }
-                Button { NSWorkspace.shared.activateFileViewerSelecting([pc.url]) } label: {
-                    Label("Finder", systemImage: "folder")
+                Menu {
+                    Button("MP4 Video", systemImage: "film") { exportVideo(trimmed: false) }
+                    Button("Animated GIF", systemImage: "photo.stack") { exportGIF() }
+                    Button("Audio Only", systemImage: "waveform") { exportAudio() }
+                } label: { Label("Export", systemImage: "square.and.arrow.down") }
+                Menu {
+                    Button("Generate Notes", systemImage: "person.2.wave.2.fill") {
+                        AppState.shared.transcribeRecording(url: pc.url, fallbackTitle: title)
+                    }
+                    Button("Combine Clips…", systemImage: "square.stack.3d.forward.dottedline") { combineClips() }
+                    Button("Copy Video", systemImage: "doc.on.doc") { copyFile() }
+                    Button("Show in Finder", systemImage: "folder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([pc.url])
+                    }
+                    Divider()
+                    Menu("Playback Speed", systemImage: "speedometer") {
+                        Button("0.5×") { pc.player.rate = 0.5 }
+                        Button("1×") { pc.player.rate = 1 }
+                        Button("1.5×") { pc.player.rate = 1.5 }
+                        Button("2×") { pc.player.rate = 2 }
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
                 }
             }
             .padding(12)
@@ -105,7 +124,7 @@ struct VideoPreviewView: View {
         .frame(minWidth: 720, minHeight: 480)
     }
 
-    private func annotate() {
+    private func annotate(range: CMTimeRange?) {
         pc.pause()
         let time = pc.player.currentTime()
         Toast.show("Opening the current frame to annotate…", symbol: "pencil.tip.crop.circle")
@@ -120,12 +139,44 @@ struct VideoPreviewView: View {
                 guard panel.runModal() == .OK, let dest = panel.url else { return }
                 Toast.show("Rendering annotated video…", symbol: "gearshape")
                 Task {
-                    let ok = await VideoAnnotator.bake(overlay: overlay, over: pc.url, to: dest)
+                    let ok = await VideoAnnotator.bake(overlay: overlay, over: pc.url, to: dest,
+                                                       visibleRange: range)
                     Toast.show(ok ? "Annotated video saved" : "Render failed",
                                symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     if ok { NSWorkspace.shared.activateFileViewerSelecting([dest]) }
                 }
             }
+        }
+    }
+
+    private func momentRange() -> CMTimeRange {
+        let duration = pc.player.currentItem?.duration.seconds ?? 0
+        let start = max(0, pc.player.currentTime().seconds - 2.5)
+        return CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
+                           duration: CMTime(seconds: min(5, max(0, duration - start)), preferredTimescale: 600))
+    }
+
+    private func remainingRange() -> CMTimeRange {
+        let start = max(0, pc.player.currentTime().seconds)
+        let duration = pc.player.currentItem?.duration.seconds ?? start
+        return CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
+                           duration: CMTime(seconds: max(0, duration - start), preferredTimescale: 600))
+    }
+
+    private func exportFrame() {
+        pc.pause(); let time = pc.player.currentTime()
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "\(title)-frame.png"
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        Task {
+            guard let frame = await VideoAnnotator.grabFrame(from: pc.url, at: time),
+                  let data = Exporter.data(frame, format: .png) else {
+                Toast.show("Couldn't save frame", symbol: "exclamationmark.triangle.fill"); return
+            }
+            do {
+                try data.write(to: destination, options: .atomic)
+                Toast.show("Frame saved", symbol: "checkmark.circle.fill")
+            } catch { Toast.show("Couldn't save frame", symbol: "exclamationmark.triangle.fill") }
         }
     }
 
@@ -147,6 +198,27 @@ struct VideoPreviewView: View {
             Toast.show(ok ? "Video saved" : "Export failed",
                        symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
             if ok { NSWorkspace.shared.activateFileViewerSelecting([dest]) }
+        }
+    }
+
+    private func combineClips() {
+        pc.pause()
+        let open = NSOpenPanel()
+        open.allowedContentTypes = [.mpeg4Movie, .movie]
+        open.allowsMultipleSelection = true
+        open.message = "Choose clips to append after this recording"
+        guard open.runModal() == .OK, !open.urls.isEmpty else { return }
+        let save = NSSavePanel()
+        save.allowedContentTypes = [.mpeg4Movie]
+        save.nameFieldStringValue = "\(title)-combined.mp4"
+        guard save.runModal() == .OK, let destination = save.url else { return }
+        Toast.show("Combining \(open.urls.count + 1) clips…", symbol: "square.stack.3d.forward.dottedline")
+        let sources = [pc.url] + open.urls
+        Task {
+            let ok = await VideoComposer.combine(sources, to: destination)
+            Toast.show(ok ? "Combined video saved" : "Couldn't combine these clips",
+                       symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            if ok { NSWorkspace.shared.activateFileViewerSelecting([destination]) }
         }
     }
 

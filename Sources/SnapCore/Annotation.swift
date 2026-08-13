@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// The annotation tools available in the editor.
 public enum Tool: String, CaseIterable, Sendable {
-    case arrow, line, rect, ellipse, text, callout, step, highlight, blur, pen, crop, stamp
+    case arrow, line, rect, ellipse, text, callout, step, highlight, blur, pen, crop, stamp, spotlight, magnify, smartMove
 }
 
 /// Endpoint decoration for arrows/lines.
@@ -152,6 +152,40 @@ public struct AnnotationDocument: Sendable {
     public mutating func update(id: Int, _ transform: (inout Annotation) -> Void) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         transform(&items[idx])
+    }
+
+    @discardableResult
+    public mutating func duplicate(id: Int, offset: CGPoint = CGPoint(x: 16, y: 16)) -> Annotation? {
+        guard var copy = items.first(where: { $0.id == id }) else { return nil }
+        copy = Annotation(id: nextID, tool: copy.tool,
+                          start: CGPoint(x: copy.start.x + offset.x, y: copy.start.y + offset.y),
+                          end: CGPoint(x: copy.end.x + offset.x, y: copy.end.y + offset.y),
+                          text: copy.text, colorHex: copy.colorHex, thickness: copy.thickness,
+                          stepNumber: copy.tool == .step ? nextStep : copy.stepNumber,
+                          filled: copy.filled, opacity: copy.opacity, stepStyle: copy.stepStyle,
+                          lineStyle: copy.lineStyle, startHead: copy.startHead,
+                          endHead: copy.endHead, arrowSize: copy.arrowSize)
+        nextID += 1
+        if copy.tool == .step { nextStep += 1 }
+        items.append(copy)
+        return copy
+    }
+
+    public mutating func bringToFront(id: Int) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items.append(items.remove(at: index))
+    }
+
+    public mutating func sendToBack(id: Int) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items.insert(items.remove(at: index), at: 0)
+    }
+
+    public mutating func transformAll(_ transform: (CGPoint) -> CGPoint) {
+        for index in items.indices {
+            items[index].start = transform(items[index].start)
+            items[index].end = transform(items[index].end)
+        }
     }
 
     public var stepCount: Int { items.filter { $0.tool == .step }.count }

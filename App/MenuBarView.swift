@@ -196,6 +196,14 @@ struct MenuBarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if rec.kind == .image {
+                Button("Annotate Again", systemImage: "pencil.and.outline") { app.annotateAgain(rec) }
+            }
+            Button("Show in Finder", systemImage: "folder") {
+                NSWorkspace.shared.activateFileViewerSelecting([library.fileURL(for: rec)])
+            }
+        }
     }
 
     // MARK: Footer

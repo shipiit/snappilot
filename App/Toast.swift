@@ -51,7 +51,7 @@ enum Toast {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
             NSAnimationContext.runAnimationGroup { ctx in
                 ctx.duration = 0.3; win.animator().alphaValue = 0
-            } completionHandler: { win.orderOut(nil) }
+            } completionHandler: { Task { @MainActor in win.orderOut(nil) } }
         }
     }
 }

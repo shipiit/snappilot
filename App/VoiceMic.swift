@@ -9,13 +9,13 @@ import AVFoundation
 /// on noise cancellation, and it works on macOS 13+ (SCStream mic needs 15+).
 final class VoiceMic: @unchecked Sendable {
     private let engine = AVAudioEngine()
-    private var onSample: ((CMSampleBuffer) -> Void)?
+    private var onSample: (@Sendable (CMSampleBuffer) -> Void)?
     private var formatDesc: CMAudioFormatDescription?
     private(set) var running = false
 
     /// Start capturing. `onSample` is called on the audio engine's render thread — the
     /// caller is responsible for hopping to whatever queue owns the asset writer.
-    func start(onSample: @escaping (CMSampleBuffer) -> Void) throws {
+    func start(onSample: @escaping @Sendable (CMSampleBuffer) -> Void) throws {
         self.onSample = onSample
         let input = engine.inputNode
         // Enabling voice processing on the input node turns on NS/AEC/AGC. It must be set

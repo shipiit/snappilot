@@ -14,18 +14,47 @@ struct RecordReadyView: View {
 
             VStack(spacing: 0) {
                 optionRow("cursorarrow", "Cursor", isOn: $app.recordCursor)
+                if app.recordCursor {
+                    Divider()
+                    optionRow("cursorarrow.rays", "Cursor highlight & click ripples", isOn: $app.recordCursorHighlight)
+                        .padding(.leading, 18)
+                }
                 Divider()
                 optionRow("speaker.wave.2.fill", "System Audio", isOn: $app.recordSystemAudio)
                 Divider()
                 optionRow("web.camera.fill", "Webcam", isOn: $app.recordCamera)
+                if app.recordCamera {
+                    Divider()
+                    HStack {
+                        Label("Background", systemImage: "person.crop.rectangle")
+                            .font(.callout).padding(.leading, 18)
+                        Spacer()
+                        Picker("", selection: $app.recordWebcamEffect) {
+                            ForEach(WebcamBackgroundEffect.allCases) { Text($0.rawValue).tag($0) }
+                        }.labelsHidden().frame(width: 155)
+                    }.padding(.vertical, 9)
+                }
                 Divider()
                 optionRow("mic.fill", "Microphone", isOn: $app.recordMic)
+                if app.recordMic {
+                    Divider()
+                    optionRow("waveform.badge.mic", "Noise cancellation", isOn: $app.recordNoiseCancellation)
+                        .padding(.leading, 18)
+                }
             }
             .padding(.horizontal, 16).padding(.vertical, 6)
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
 
             Toggle("Show countdown before recording", isOn: $app.recordCountdown)
                 .toggleStyle(.checkbox).font(.callout)
+
+            HStack {
+                Label("Quality", systemImage: "wand.and.stars").font(.callout)
+                Spacer()
+                Picker("", selection: $app.recordQuality) {
+                    ForEach(RecordQuality.allCases, id: \.self) { Text($0.title).tag($0) }
+                }.labelsHidden().frame(width: 130)
+            }
 
             HStack(spacing: 12) {
                 Button { onCancel() } label: { Text("Cancel").frame(maxWidth: .infinity) }
@@ -67,7 +96,7 @@ final class RecordReadyController: NSWindowController {
     }
 
     init(app: AppState, onRecord: @escaping () -> Void, onCancel: @escaping () -> Void) {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 360),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 470),
                               styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden

@@ -22,7 +22,8 @@ enum VideoAnnotator {
 
     /// Composite `overlay` (transparent PNG at the frame's size) over the video for its full
     /// duration and export to `dest`.
-    static func bake(overlay: CGImage, over videoURL: URL, to dest: URL) async -> Bool {
+    static func bake(overlay: CGImage, over videoURL: URL, to dest: URL,
+                     visibleRange: CMTimeRange? = nil) async -> Bool {
         let asset = AVURLAsset(url: videoURL)
         guard let comp = try? await AVMutableVideoComposition.videoComposition(withPropertiesOf: asset) else {
             return false
@@ -36,6 +37,23 @@ enum VideoAnnotator {
         overlayLayer.frame = CGRect(origin: .zero, size: renderSize)
         overlayLayer.contents = overlay
         overlayLayer.contentsGravity = .resize
+
+        if let visibleRange,
+           let duration = try? await asset.load(.duration), duration.seconds > 0 {
+            let total = duration.seconds
+            let start = min(1, max(0, visibleRange.start.seconds / total))
+            let end = min(1, max(start, visibleRange.end.seconds / total))
+            let animation = CAKeyframeAnimation(keyPath: "opacity")
+            animation.values = [0, 0, 1, 1, 0, 0]
+            animation.keyTimes = [0, NSNumber(value: start), NSNumber(value: start),
+                                  NSNumber(value: end), NSNumber(value: end), 1]
+            animation.calculationMode = .discrete
+            animation.beginTime = AVCoreAnimationBeginTimeAtZero
+            animation.duration = total
+            animation.isRemovedOnCompletion = false
+            animation.fillMode = .both
+            overlayLayer.add(animation, forKey: "timedVisibility")
+        }
 
         let parent = CALayer()
         parent.frame = CGRect(origin: .zero, size: renderSize)

@@ -1,4 +1,5 @@
 import SwiftUI
+import SnapCore
 
 @main
 struct SnappilotApp: App {
@@ -38,6 +39,9 @@ struct SnappilotApp: App {
             Button(item("Capture Full Screen", .captureFull)) { app.captureFullScreen() }
             Button(item("Grab Text (OCR)", .grabText)) { app.grabText() }
             Button(item("Scrolling Capture", .scrollingCapture)) { app.scrollingCapture() }
+            Button("Start Step Recorder") { app.startStepRecorder() }
+            Button("Annotate Latest Image", systemImage: "pencil.and.outline") { app.annotateLatestImage() }
+            Button("Share Latest Capture…", systemImage: "square.and.arrow.up") { app.shareLatestCapture() }
             Divider()
             Button(item("Record Region", .recordRegion)) { app.toggleRecordRegion() }
             Button(item("Record Screen", .recordScreen)) { app.toggleRecordScreen() }
@@ -46,6 +50,28 @@ struct SnappilotApp: App {
             Divider()
             Button("Customize Shortcuts…") { NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) }
             Button("Open Library Folder") { app.openLibraryFolder() }
+        }
+        CommandMenu("Annotate") {
+            Button("Select", systemImage: "cursorarrow.rays") { app.selectEditorTool(nil) }
+            Divider()
+            Button("Arrow", systemImage: "arrow.up.right") { app.selectEditorTool(.arrow) }
+            Button("Text", systemImage: "textformat") { app.selectEditorTool(.text) }
+            Button("Callout", systemImage: "bubble.left.fill") { app.selectEditorTool(.callout) }
+            Button("Rectangle", systemImage: "rectangle") { app.selectEditorTool(.rect) }
+            Button("Ellipse", systemImage: "circle") { app.selectEditorTool(.ellipse) }
+            Button("Line", systemImage: "line.diagonal") { app.selectEditorTool(.line) }
+            Button("Step", systemImage: "number.circle.fill") { app.selectEditorTool(.step) }
+            Button("Highlight", systemImage: "highlighter") { app.selectEditorTool(.highlight) }
+            Button("Blur", systemImage: "eye.slash.fill") { app.selectEditorTool(.blur) }
+            Button("Pen", systemImage: "pencil.tip") { app.selectEditorTool(.pen) }
+            Button("Stamp", systemImage: "face.smiling") { app.selectEditorTool(.stamp) }
+            Button("Spotlight", systemImage: "light.max") { app.selectEditorTool(.spotlight) }
+            Button("Magnify", systemImage: "plus.magnifyingglass") { app.selectEditorTool(.magnify) }
+            Button("Smart Move", systemImage: "move.3d") { app.selectEditorTool(.smartMove) }
+            Button("Crop", systemImage: "crop") { app.selectEditorTool(.crop) }
+            Divider()
+            Button("Undo Editor", systemImage: "arrow.uturn.backward") { app.undoEditor() }
+            Button("Redo Editor", systemImage: "arrow.uturn.forward") { app.redoEditor() }
         }
         CommandGroup(replacing: .help) {
             Button("Snappilot Guide") { WelcomeWindowController.present(app: app) }

@@ -29,6 +29,14 @@ check(sel.isValid, "non-empty selection is valid")
 check(!CaptureSelection(rect: .zero, displayID: 1, scale: 2).isValid, "zero selection invalid")
 
 // MARK: ImageOps
+func renderSolid(width: Int, height: Int) -> CGImage? {
+    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                  bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+    context.setFillColor(CGColor(red: 0.2, green: 0.4, blue: 0.8, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    return context.makeImage()
+}
 check(ImageOps.clampBlock(0) == 2, "block size floored to 2")
 check(ImageOps.clampBlock(999) == 64, "block size capped at 64")
 check(ImageOps.clampBlock(12) == 12, "block size in range unchanged")
@@ -36,6 +44,14 @@ check(ImageOps.fit(CGSize(width: 4000, height: 2000), maxEdge: 1000) == CGSize(w
       "fit scales longest edge to max")
 check(ImageOps.fit(CGSize(width: 300, height: 200), maxEdge: 1000) == CGSize(width: 300, height: 200),
       "fit leaves already-small size")
+if let fixture = renderSolid(width: 12, height: 8) {
+    check(ImageOps.resized(fixture, width: 6, height: 4)?.width == 6, "resize changes pixel dimensions")
+    let rotated = ImageOps.rotatedRight(fixture)
+    check(rotated?.width == 8 && rotated?.height == 12, "rotate swaps width and height")
+    check(ImageOps.flippedHorizontal(fixture)?.width == 12, "horizontal flip preserves dimensions")
+    let filled = ImageOps.filling(fixture, rect: CGRect(x: 2, y: 2, width: 4, height: 3))
+    check(filled?.width == 12 && filled?.height == 8, "smart-move fill preserves canvas dimensions")
+}
 
 // MARK: Redaction
 check(Redaction.containsEmail("ping rahul@iamrraj.com now"), "detects email")
@@ -50,10 +66,14 @@ let s2 = doc.add(.step, start: .zero, end: .zero)
 check(s1.stepNumber == 1 && s2.stepNumber == 2, "step badges auto-increment")
 let a1 = doc.add(.arrow, start: .zero, end: CGPoint(x: 10, y: 10))
 check(a1.stepNumber == nil, "non-step has no step number")
+check(Tool.allCases.contains(.smartMove), "smart move is available as an editor tool")
 doc.remove(id: s1.id)
 check(doc.stepCount == 1, "removal is non-destructive to others")
 doc.update(id: s2.id) { $0.colorHex = "#00FF00" }
 check(doc.items.first(where: { $0.id == s2.id })?.colorHex == "#00FF00", "update mutates in place")
+let duplicate = doc.duplicate(id: a1.id)
+check(duplicate != nil && duplicate!.id != a1.id, "duplicate creates a new annotation")
+if let duplicate { doc.sendToBack(id: duplicate.id); check(doc.items.first?.id == duplicate.id, "send to back changes layer order") }
 
 // Step numbering styles
 check(StepStyle.number.label(for: 3) == "3", "numeric step label")

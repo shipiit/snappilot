@@ -54,6 +54,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         window?.makeKeyAndOrderFront(nil)
     }
 
+    func undo() { model.undo() }
+    func redo() { model.redo() }
+
     func windowWillClose(_ notification: Notification) {
         onClose?(self)
     }

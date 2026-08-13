@@ -26,8 +26,7 @@ func hexString(fromNSColor color: NSColor) -> String {
 /// Flattens a base image + annotation layers into a single raster image.
 /// Annotation coordinates are in the base image's **pixel** space, top-left origin.
 enum AnnotationRenderer {
-    // CIContext is safe to share across threads (Apple docs); opt out of Sendable checking.
-    nonisolated(unsafe) private static let ciContext = CIContext()
+    private static let ciContext = CIContext()
 
     /// Flatten annotations onto `base`. When `transparent` is true the base is left out
     /// (annotations on a clear canvas) — used to bake an overlay onto video.
@@ -93,13 +92,19 @@ enum AnnotationRenderer {
             // Pixelate the region of the frame. For video this becomes a static blurred
             // patch baked over the clip — good for hiding a fixed name/logo/field.
             drawBlur(rectTL: selectionRect(from: a.start, to: a.end), imageHeight: h, base: base, ctx: ctx)
+        case .spotlight:
+            drawSpotlight(rectTL: selectionRect(from: a.start, to: a.end), imageHeight: h,
+                          base: base, ctx: ctx, opacity: a.opacity)
+        case .magnify:
+            drawMagnify(rectTL: selectionRect(from: a.start, to: a.end), imageHeight: h,
+                        base: base, ctx: ctx, scale: max(1.5, a.thickness / 2))
         case .stamp:
             let s = (a.text.isEmpty ? "⭐️" : a.text) as NSString
             let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: max(24, lw * 12))]
             let center = flipY(a.start, h)
             let sz = s.size(withAttributes: attrs)
             s.draw(at: NSPoint(x: center.x - sz.width / 2, y: center.y - sz.height / 2), withAttributes: attrs)
-        case .crop:
+        case .crop, .smartMove:
             break   // crop is applied to the base image itself, not drawn
         }
     }
@@ -187,5 +192,40 @@ enum AnnotationRenderer {
         guard let out = filter.outputImage?.cropped(to: ci.extent),
               let cg = ciContext.createCGImage(out, from: ci.extent) else { return }
         ctx.draw(cg, in: bl)
+    }
+
+    private static func drawSpotlight(rectTL: CGRect, imageHeight h: Int, base: CGImage,
+                                      ctx: CGContext, opacity: Double) {
+        let full = CGRect(x: 0, y: 0, width: base.width, height: base.height)
+        let focus = CGRect(x: rectTL.minX, y: CGFloat(h) - rectTL.maxY,
+                           width: rectTL.width, height: rectTL.height)
+        ctx.saveGState()
+        ctx.setFillColor(NSColor.black.withAlphaComponent(0.62 * opacity).cgColor)
+        ctx.addRect(full)
+        ctx.addPath(CGPath(roundedRect: focus.insetBy(dx: -3, dy: -3),
+                           cornerWidth: 8, cornerHeight: 8, transform: nil))
+        ctx.drawPath(using: .eoFill)
+        ctx.restoreGState()
+        NSColor.white.withAlphaComponent(0.9).setStroke()
+        let border = NSBezierPath(roundedRect: focus.insetBy(dx: -3, dy: -3), xRadius: 8, yRadius: 8)
+        border.lineWidth = 4; border.stroke()
+    }
+
+    private static func drawMagnify(rectTL: CGRect, imageHeight h: Int, base: CGImage,
+                                    ctx: CGContext, scale: Double) {
+        guard rectTL.width > 4, rectTL.height > 4,
+              let region = ImageOps.crop(base, to: rectTL) else { return }
+        let target = NSRect(x: rectTL.minX, y: CGFloat(h) - rectTL.maxY,
+                            width: rectTL.width, height: rectTL.height)
+        let expanded = NSRect(x: target.midX - target.width * CGFloat(scale) / 2,
+                              y: target.midY - target.height * CGFloat(scale) / 2,
+                              width: target.width * CGFloat(scale), height: target.height * CGFloat(scale))
+        ctx.saveGState()
+        ctx.setShadow(offset: .zero, blur: 18, color: NSColor.black.withAlphaComponent(0.45).cgColor)
+        ctx.addEllipse(in: expanded); ctx.clip()
+        ctx.draw(region, in: expanded)
+        ctx.restoreGState()
+        NSColor.white.setStroke()
+        let ring = NSBezierPath(ovalIn: expanded); ring.lineWidth = 5; ring.stroke()
     }
 }
