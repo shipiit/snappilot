@@ -299,6 +299,17 @@ func makeClip(audioTracks: Int) async throws -> URL {
     return url
 }
 
+/// What a mixed clip contains, as plain values (AVFoundation objects stay inside this function).
+struct ClipSummary: Sendable { let audioTracks: Int; let videoTracks: Int; let seconds: Double; let pcm: [Int16] }
+
+func summarize(_ url: URL) async throws -> ClipSummary {
+    let asset = AVURLAsset(url: url)
+    return ClipSummary(audioTracks: try await asset.loadTracks(withMediaType: .audio).count,
+                       videoTracks: try await asset.loadTracks(withMediaType: .video).count,
+                       seconds: try await asset.load(.duration).seconds,
+                       pcm: try await decodePCM(asset))
+}
+
 /// Decode an asset's first audio track to mono Int16 PCM.
 func decodePCM(_ asset: AVAsset) async throws -> [Int16] {
     guard let track = try await asset.loadTracks(withMediaType: .audio).first else { return [] }
@@ -331,13 +342,12 @@ do {
     let twoTrack = try await makeClip(audioTracks: 2)
     check(try await AudioMixdown.audioTrackCount(of: twoTrack) == 2, "fixture has two audio tracks")
     let mixed = try await AudioMixdown.mixInPlace(twoTrack)
-    let after = AVURLAsset(url: twoTrack)
+    let after = try await summarize(twoTrack)
     check(mixed, "two-track clip is mixed")
-    check(try await after.loadTracks(withMediaType: .audio).count == 1, "mixed clip has a single audio track")
-    check(try await after.loadTracks(withMediaType: .video).count == 1, "video track survives the mixdown")
-    let seconds = try await after.load(.duration).seconds
-    check(abs(seconds - 1) < 0.15, "duration preserved after mixdown (got \(seconds)s)")
-    let pcm = try await decodePCM(after)
+    check(after.audioTracks == 1, "mixed clip has a single audio track")
+    check(after.videoTracks == 1, "video track survives the mixdown")
+    check(abs(after.seconds - 1) < 0.15, "duration preserved after mixdown (got \(after.seconds)s)")
+    let pcm = after.pcm
     let control = tonePower(pcm, frequency: 660)
     check(tonePower(pcm, frequency: 440) > control * 50, "mixed track contains the first source's tone")
     check(tonePower(pcm, frequency: 880) > control * 50, "mixed track contains the second source's tone")
