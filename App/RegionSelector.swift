@@ -157,6 +157,25 @@ final class OverlayWindow: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// Overlay fonts, created once. `NSFont.monospacedSystemFont` created on every draw can return
+/// nil despite its nonnull annotation; Swift doesn't check, and a nil font in an attributes
+/// dictionary aborts the app inside CoreText. The lookup below goes through optional-returning
+/// APIs so a failure falls back to another font instead of crashing.
+@MainActor
+private enum OverlayFonts {
+    static let hintKey: NSFont = monospaced(size: 11, weight: .bold)
+    static let hintText: NSFont = NSFont.systemFont(ofSize: 11, weight: .regular)
+
+    private static func monospaced(size: CGFloat, weight: NSFont.Weight) -> NSFont {
+        let base = NSFont.systemFont(ofSize: size, weight: weight)
+        if let descriptor = base.fontDescriptor.withDesign(.monospaced),
+           let font = NSFont(descriptor: descriptor, size: size) {
+            return font
+        }
+        return NSFont.userFixedPitchFont(ofSize: size) ?? base
+    }
+}
+
 final class OverlayView: NSView {
     private let screenRef: NSScreen
     private let mode: SelectorMode
@@ -298,8 +317,8 @@ final class OverlayView: NSView {
             ("D", "exact dimensions"),
             ("Drag", "select a region"),
         ]
-        let keyFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .bold)
-        let txtFont = NSFont.systemFont(ofSize: 11, weight: .regular)
+        let keyFont = OverlayFonts.hintKey
+        let txtFont = OverlayFonts.hintText
         let rowH: CGFloat = 20, pad: CGFloat = 14
         let width: CGFloat = 210
         let height = CGFloat(lines.count) * rowH + pad * 2
