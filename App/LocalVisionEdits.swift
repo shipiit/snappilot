@@ -1,5 +1,5 @@
 import CoreGraphics
-import CoreImage
+@preconcurrency import CoreImage
 import Vision
 import SnapCore
 

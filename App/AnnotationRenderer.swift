@@ -1,5 +1,5 @@
 import AppKit
-import CoreImage
+@preconcurrency import CoreImage
 import CoreGraphics
 import SnapCore
 
