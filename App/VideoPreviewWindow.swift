@@ -244,7 +244,7 @@ struct VideoPreviewView: View {
         }
     }
 
-    private static func extractAudio(from src: URL, to dest: URL) async -> Bool {
+    nonisolated private static func extractAudio(from src: URL, to dest: URL) async -> Bool {
         let asset = AVURLAsset(url: src)
         guard let tracks = try? await asset.loadTracks(withMediaType: .audio), !tracks.isEmpty else { return false }
         try? FileManager.default.removeItem(at: dest)
