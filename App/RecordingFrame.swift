@@ -28,6 +28,7 @@ final class RecordingFrame {
         let view = FrameView(frame: NSRect(origin: .zero, size: winFrame.size))
         win.contentView = view
         win.orderFrontRegardless()
+        RecordingController.shared.excludeFromRecording(win)
         window = win
         RecordingFrame.frameView = view
 

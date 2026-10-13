@@ -56,6 +56,9 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
     private(set) var isRecording = false
     private var outputURL: URL?
     private var pixelSize = CGSize.zero
+    private var display: SCDisplay?
+    /// Snappilot's own chrome (HUD, region frame, toasts, draw toolbar) — never recorded.
+    @MainActor private var excludedWindowIDs: Set<CGWindowID> = []
     private var videoFPS: Int32 = 30
     private var videoBitrate = 6_000_000
     var recordingPixelSize: CGSize { pixelSize }
@@ -88,7 +91,8 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
         let pixelScale = quality.pixelScale(screenScale: scale)
         videoFPS = quality.fps
 
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        self.display = display
+        let filter = SCContentFilter(display: display, excludingWindows: excludedWindows(in: content))
         let config = SCStreamConfiguration()
         config.minimumFrameInterval = CMTime(value: 1, timescale: videoFPS)
         config.queueDepth = 6
@@ -238,6 +242,26 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
         return out ?? sb
     }
 
+    /// Keep one of Snappilot's interface windows out of the recording. Safe to call before
+    /// or during a recording; a live stream gets its filter updated immediately.
+    @MainActor
+    func excludeFromRecording(_ window: NSWindow) {
+        guard window.windowNumber > 0 else { return }
+        excludedWindowIDs.insert(CGWindowID(window.windowNumber))
+        guard let stream, let display else { return }
+        Task { @MainActor in
+            guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            else { return }
+            let filter = SCContentFilter(display: display, excludingWindows: excludedWindows(in: content))
+            try? await stream.updateContentFilter(filter)
+        }
+    }
+
+    @MainActor
+    private func excludedWindows(in content: SCShareableContent) -> [SCWindow] {
+        content.windows.filter { excludedWindowIDs.contains($0.windowID) }
+    }
+
     func stop() {
         queue.async { [weak self] in
             guard let self, !self.finishing else { return }
@@ -285,7 +309,8 @@ final class RecordingController: NSObject, SCStreamOutput, SCStreamDelegate, @un
 
     private func reset() {
         voiceMic?.stop(); voiceMic = nil
-        stream = nil; writer = nil; videoInput = nil; audioInput = nil; micInput = nil
+        stream = nil; writer = nil; videoInput = nil; audioInput = nil; micInput = nil; display = nil
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.excludedWindowIDs.removeAll() } }
         started = false; finishing = false; paused = false
         pauseStart = .invalid; pausedOffset = .zero; outputURL = nil
     }

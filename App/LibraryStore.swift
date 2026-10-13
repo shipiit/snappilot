@@ -3,6 +3,7 @@ import CoreGraphics
 import ImageIO
 import SnapCore
 import UniformTypeIdentifiers
+import os
 
 /// Persists every capture to ~/Pictures/Snappilot, organized by month, and keeps a JSON
 /// index (title + OCR text) so captures are searchable later.
@@ -19,10 +20,29 @@ final class LibraryStore: ObservableObject {
     private var tasksURL: URL { root.appendingPathComponent("tasks.json") }
     private var notesURL: URL { root.appendingPathComponent("notes.json") }
 
+    nonisolated private static let log = Logger(subsystem: "ai.snappilot.mac", category: "library")
+    /// JSON saves are coalesced and written off the main thread; see `CoalescingWriter`.
+    private let writer = CoalescingWriter { url, error in
+        LibraryStore.log.error("Failed to write \(url.lastPathComponent, privacy: .public): \(String(describing: error), privacy: .public)")
+    }
+
+    /// Project saves run one at a time so a later save can never be overtaken by an earlier one.
+    private let projectQueue = DispatchQueue(label: "ai.snappilot.project-save", qos: .utility)
+
     init(root: URL = CaptureLibrary.defaultRoot()) {
         self.root = root
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         load()
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
+                                               object: nil, queue: nil) { [writer] _ in writer.flush() }
+    }
+
+    private func save<T: Encodable & Sendable>(_ value: T, to url: URL, compact: Bool = false) {
+        writer.schedule(url) {
+            let encoder = JSONEncoder.snap
+            if compact { encoder.outputFormatting = [] }
+            return try encoder.encode(value)
+        }
     }
 
     private func load() {
@@ -44,15 +64,9 @@ final class LibraryStore: ObservableObject {
         }
     }
 
-    private func persistIndex() {
-        guard let data = try? JSONEncoder.snap.encode(records) else { return }
-        try? data.write(to: indexURL, options: .atomic)
-    }
+    private func persistIndex() { save(records, to: indexURL, compact: true) }
 
-    private func persistCollections() {
-        guard let data = try? JSONEncoder.snap.encode(collections) else { return }
-        try? data.write(to: collectionsURL, options: .atomic)
-    }
+    private func persistCollections() { save(collections, to: collectionsURL) }
 
     // MARK: Collections
 
@@ -97,10 +111,7 @@ final class LibraryStore: ObservableObject {
 
     // MARK: Tasks (Kanban board)
 
-    private func persistTasks() {
-        guard let data = try? JSONEncoder.snap.encode(tasks) else { return }
-        try? data.write(to: tasksURL, options: .atomic)
-    }
+    private func persistTasks() { save(tasks, to: tasksURL) }
 
     func tasks(in status: TaskStatus) -> [TaskItem] {
         tasks.filter { $0.status == status }.sorted { $0.order < $1.order }
@@ -172,10 +183,7 @@ final class LibraryStore: ObservableObject {
 
     // MARK: Notes
 
-    private func persistNotes() {
-        guard let data = try? JSONEncoder.snap.encode(notes) else { return }
-        try? data.write(to: notesURL, options: .atomic)
-    }
+    private func persistNotes() { save(notes, to: notesURL) }
 
     @discardableResult
     func createNote(title: String = "", body: String = "", folder: String? = nil) -> Note {
@@ -364,7 +372,18 @@ final class LibraryStore: ObservableObject {
                                    title: title.isEmpty ? defaultTitle(for: date) : title)
         records.insert(record, at: 0)
         persistIndex()
+        if ocrText.isEmpty { indexText(of: image, id: record.id) }
         return record
+    }
+
+    /// OCR in the background so every capture is searchable, even if the editor is closed
+    /// without pressing Done.
+    private func indexText(of image: CGImage, id: String) {
+        let languages = Preference.value("pref.ocrLanguages", default: ["en-US"])
+        Task {
+            guard let lines = try? await OCR.recognize(image, languages: languages), !lines.isEmpty else { return }
+            setOCRText(id: id, lines.joined(separator: "\n"))
+        }
     }
 
     /// Move a finished recording into the library and index it.
@@ -473,9 +492,45 @@ final class LibraryStore: ObservableObject {
         Array(Set(records.flatMap { $0.tagList })).sorted { $0.lowercased() < $1.lowercased() }
     }
 
+    // MARK: Editable projects
+
+    /// Save the editable state behind a capture, off the main thread.
+    func saveProject(recordID: String, project: EditorProject, base: CGImage, layerImages: [Int: CGImage]) {
+        guard let record = records.first(where: { $0.id == recordID }) else { return }
+        let folder = EditorProject.folder(for: fileURL(for: record))
+        let images = SendableImages(base: base, layers: layerImages)
+        projectQueue.async {
+            do { try EditorProject.save(project, base: images.base, layerImages: images.layers, to: folder) } catch {
+                LibraryStore.log.error("Failed to save project \(recordID, privacy: .public): \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    func removeProject(recordID: String) {
+        guard let record = records.first(where: { $0.id == recordID }) else { return }
+        let folder = EditorProject.folder(for: fileURL(for: record))
+        projectQueue.async { try? FileManager.default.removeItem(at: folder) }
+    }
+
+    /// The editable project for a capture, or nil if it was never annotated (or can't be read).
+    func loadProject(for record: CaptureRecord) -> EditorProject.Loaded? {
+        let folder = EditorProject.folder(for: fileURL(for: record))
+        projectQueue.sync {}   // let any in-flight save finish first
+        do { return try EditorProject.load(from: folder) } catch {
+            LibraryStore.log.error("Unreadable project \(record.id, privacy: .public): \(String(describing: error), privacy: .public)")
+            return nil
+        }
+    }
+
     /// Move a capture's file to the Trash and drop it from the index.
     func moveToTrash(_ record: CaptureRecord) {
         try? FileManager.default.trashItem(at: fileURL(for: record), resultingItemURL: nil)
+        let project = EditorProject.folder(for: fileURL(for: record))
+        projectQueue.async {
+            if FileManager.default.fileExists(atPath: project.path) {
+                try? FileManager.default.trashItem(at: project, resultingItemURL: nil)
+            }
+        }
         records.removeAll { $0.id == record.id }
         persistIndex()
         var changed = false
@@ -514,4 +569,10 @@ extension JSONDecoder {
     static var snap: JSONDecoder {
         let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d
     }
+}
+
+/// CGImage is immutable; this lets a snapshot of editor images cross to a background task.
+private struct SendableImages: @unchecked Sendable {
+    let base: CGImage
+    let layers: [Int: CGImage]
 }

@@ -10,6 +10,34 @@ public enum ImageOps {
         return image.cropping(to: r)
     }
 
+    /// The image with transparent rounded corners. Radius is clamped to half the short side.
+    public static func roundedCorners(_ image: CGImage, radius: CGFloat) -> CGImage? {
+        let width = image.width, height = image.height
+        let r = min(max(0, radius), CGFloat(min(width, height)) / 2)
+        guard r > 0 else { return image }
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        context.addPath(CGPath(roundedRect: bounds, cornerWidth: r, cornerHeight: r, transform: nil))
+        context.clip()
+        context.draw(image, in: bounds)
+        return context.makeImage()
+    }
+
+    /// A larger transparent canvas with `image` drawn at `offset` (top-left origin pixels).
+    public static func expanded(_ image: CGImage, to size: CGSize, offset: CGVector) -> CGImage? {
+        let width = Int(size.width), height = Int(size.height)
+        guard width >= image.width, height >= image.height,
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        // CGContext is bottom-left origin; convert the top-left offset.
+        let y = CGFloat(height) - offset.dy - CGFloat(image.height)
+        context.draw(image, in: CGRect(x: offset.dx, y: y, width: CGFloat(image.width), height: CGFloat(image.height)))
+        return context.makeImage()
+    }
+
     /// Clamp a requested pixelate block size to a sane range (used by the redaction tool).
     public static func clampBlock(_ n: Int) -> Int { max(2, min(64, n)) }
 

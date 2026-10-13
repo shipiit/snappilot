@@ -92,6 +92,7 @@ final class LiveDrawController: ObservableObject {
         win.collectionBehavior = [.canJoinAllSpaces, .stationary]
         win.contentView = NSHostingView(rootView: LiveDrawToolbar(controller: self))
         win.orderFrontRegardless()
+        RecordingController.shared.excludeFromRecording(win)
         toolbar = win
     }
 }

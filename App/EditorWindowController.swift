@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import CoreGraphics
+import SnapCore
 
 /// Hosts an `EditorView` in its own window (menu-bar apps have no default window).
 @MainActor
@@ -21,10 +22,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     init(image: CGImage, appState: AppState, recordID: String? = nil,
-         videoApply: ((CGImage) -> Void)? = nil) {
+         project: EditorProject.Loaded? = nil, videoApply: ((CGImage) -> Void)? = nil) {
         self.model = EditorModel(base: image, appState: appState)
         self.model.libraryRecordID = recordID
         self.model.onApplyToVideo = videoApply
+        if let project { self.model.restore(project) }
 
         // Open large — a spacious editing surface like Snagit, clamped to the screen.
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
@@ -48,14 +50,35 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     /// Reuse this window for a new capture: save the current one first, then swap in the new image.
-    func load(image: CGImage, recordID: String?) {
-        model.persistToLibrary()
+    func load(image: CGImage, recordID: String?, project: EditorProject.Loaded? = nil) {
+        if model.hasUnsavedChanges { model.persistToLibrary() }
         model.reset(base: image, recordID: recordID)
+        if let project { model.restore(project) }
         window?.makeKeyAndOrderFront(nil)
     }
 
     func undo() { model.undo() }
     func redo() { model.redo() }
+
+    /// Closing with unsaved annotations asks first, like any Mac document.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard model.onApplyToVideo == nil, model.hasUnsavedChanges else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Save your changes to this capture?"
+        alert.informativeText = "Your annotations will be lost if you don't save them."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Don't Save").hasDestructiveAction = true
+        alert.beginSheetModal(for: sender) { [weak self] response in
+            guard let self else { return }
+            switch response {
+            case .alertFirstButtonReturn: self.model.persistToLibrary(); sender.close()
+            case .alertThirdButtonReturn: self.model.discardChanges(); sender.close()
+            default: break
+            }
+        }
+        return false
+    }
 
     func windowWillClose(_ notification: Notification) {
         onClose?(self)

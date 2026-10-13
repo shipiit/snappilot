@@ -15,6 +15,7 @@ struct EditorView: View {
     @State private var draft: (tool: Tool, start: CGPoint, end: CGPoint)?
     @State private var moveAnchor: CGPoint?
     @State private var zoom: CGFloat = 1
+    @State private var pan: CGSize = .zero
     @State private var freehandPoints: [CGPoint] = []
     @State private var showResize = false
     @State private var resizeWidth = ""
@@ -27,6 +28,10 @@ struct EditorView: View {
     @State private var activeLayerHandle: LayerResizeHandle?
     @State private var resizeStartRect: CGRect?
     @State private var layerAspectLocked = true
+    @State private var activeAnnotationHandle: AnnotationHandle?
+    @State private var moveOrigin: (start: CGPoint, rect: CGRect)?
+    @State private var snapGuides: [SnapGuides.Guide] = []
+    @State private var annotationDragOriginal: Annotation?
 
     private let tools: [(Tool, String, String)] = [
         (.arrow, "arrow.up.right", "Arrow"),
@@ -44,6 +49,12 @@ struct EditorView: View {
         (.magnify, "plus.magnifyingglass", "Magnify"),
         (.smartMove, "move.3d", "Smart Move"),
         (.crop, "crop", "Crop"),
+    ]
+    /// Single-letter tool keys (V = select). Numbers 1–9 still pick the first nine tools.
+    static let letterTools: [String: Tool] = [
+        "a": .arrow, "t": .text, "o": .callout, "r": .rect, "e": .ellipse, "l": .line, "s": .step,
+        "h": .highlight, "b": .blur, "p": .pen, "k": .stamp, "g": .spotlight, "m": .magnify,
+        "x": .smartMove, "c": .crop,
     ]
     private let stampChoices = ["⭐️", "✅", "❌", "❤️", "🔥", "👍", "⚠️", "💡", "🎯", "🚀", "😀", "🙌"]
     private let palette = ["#FF3B30", "#FF9500", "#FFCC00", "#34C759",
@@ -72,8 +83,13 @@ struct EditorView: View {
         }
         .frame(minWidth: 900, minHeight: 620)
         .background(Theme.appBG)
+        .background { EditorShortcuts(model: model, copyImage: copy, exportImage: { save() }) }
         .focusable()
         .onKeyPress { press in
+            if model.editingTextID == nil, model.hasSelection, let delta = nudgeDelta(press) {
+                model.nudgeSelection(dx: delta.x, dy: delta.y)
+                return .handled
+            }
             if press.key == .escape {
                 model.editingTextID = nil
                 model.selectedID = nil
@@ -90,11 +106,14 @@ struct EditorView: View {
                 return .handled
             }
             if press.characters == "0" {
-                zoom = 1
+                zoom = 1; pan = .zero
                 return .handled
             }
-            guard model.editingTextID == nil,
-                  let n = Int(press.characters), (1...9).contains(n), n - 1 < tools.count else { return .ignored }
+            guard model.editingTextID == nil, press.modifiers.isEmpty || press.modifiers == .shift else { return .ignored }
+            let key = press.characters.lowercased()
+            if key == "v" { mode = .select; return .handled }
+            if let tool = Self.letterTools[key] { selectTool(tool); return .handled }
+            guard let n = Int(key), (1...9).contains(n), n - 1 < tools.count else { return .ignored }
             model.tool = tools[n - 1].0; mode = .draw
             return .handled
         }
@@ -113,7 +132,7 @@ struct EditorView: View {
     private var topTip: some View {
         Text(model.isVideoMode
              ? "Annotate this video frame—drawings and image layers will appear in the time range you selected."
-             : "Tip: press 1–9 to switch tools  ·  click Select then drag to move objects")
+             : "Tip: letter keys switch tools (A, T, R, S…)  ·  V selects  ·  drag objects to align with guides")
             .font(.caption)
             .foregroundStyle(model.isVideoMode ? Color.accentColor : .secondary)
             .frame(maxWidth: .infinity).padding(.vertical, 6)
@@ -147,7 +166,7 @@ struct EditorView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Label("Recent", systemImage: "clock.arrow.circlepath")
                     .font(.system(size: 12, weight: .semibold))
-                Text("Drag or click to add")
+                Text("Click to layer · ⌥-click to combine")
                     .font(.system(size: 9)).foregroundStyle(.secondary)
             }.frame(width: 86, alignment: .leading)
             Divider().padding(.vertical, 10)
@@ -186,6 +205,9 @@ struct EditorView: View {
             } label: { Label("Smart", systemImage: "sparkles") }
             Menu {
                 Toggle("Polished Frame", systemImage: "square.on.square.dashed", isOn: $model.framed)
+                Toggle("Rounded Corners", systemImage: "app", isOn: Binding(
+                    get: { model.cornerRadius > 0 },
+                    set: { model.cornerRadius = $0 ? max(12, Double(min(model.base.width, model.base.height)) * 0.02) : 0 }))
                 Button("Auto Redact", systemImage: "eye.slash") { model.autoRedact() }
                 Button("Grab Text", systemImage: "text.viewfinder") { grabText() }
                 Button("Capture Info", systemImage: "info.square") { model.addCaptureInfo() }
@@ -201,6 +223,10 @@ struct EditorView: View {
                     .disabled(model.selectedID == nil && model.selectedLayerID == nil)
                 Button("Send to Back", systemImage: "square.3.layers.3d.bottom.filled") { model.sendSelectedToBack() }
                     .disabled(model.selectedID == nil && model.selectedLayerID == nil)
+                Divider()
+                Button("Expand Canvas to Fit", systemImage: "arrow.up.left.and.arrow.down.right") {
+                    if !model.expandCanvasToFit(padding: 16) { Toast.show("Everything already fits", symbol: "checkmark.circle") }
+                }
             } label: { Label("Arrange", systemImage: "slider.horizontal.3") }
             Button { copy() } label: { Image(systemName: "doc.on.doc") }.help("Copy")
             Button { share() } label: { Image(systemName: "square.and.arrow.up") }.help("Share")
@@ -263,12 +289,13 @@ struct EditorView: View {
     // MARK: Canvas
     private var canvas: some View {
         GeometryReader { geo in
-            let fit = layout(in: geo.size, zoom: zoom)
+            let fit = layout(in: geo.size, zoom: zoom, pan: pan)
             ZStack(alignment: .topLeading) {
                 Color(nsColor: .underPageBackgroundColor)
                 Image(nsImage: NSImage(cgImage: model.base, size: model.pixelSize))
                     .resizable()
                     .frame(width: fit.size.width, height: fit.size.height)
+                    .clipShape(RoundedRectangle(cornerRadius: model.cornerRadius * fit.scale))
                     .offset(x: fit.offset.x, y: fit.offset.y)
                     .shadow(radius: 10)
 
@@ -289,12 +316,10 @@ struct EditorView: View {
                         drawLive(a, in: ctx, fit: fit)
                     }
                     if freehandPoints.count > 1 {
-                        for pair in zip(freehandPoints, freehandPoints.dropFirst()) {
-                            let segment = Annotation(id: -1, tool: .pen, start: pair.0, end: pair.1,
-                                                     colorHex: model.colorHex, thickness: model.thickness,
-                                                     opacity: model.opacity, endHead: .none)
-                            drawLive(segment, in: ctx, fit: fit)
-                        }
+                        let stroke = Annotation(id: -1, tool: .pen, start: .zero, end: .zero,
+                                                colorHex: model.colorHex, thickness: model.thickness,
+                                                opacity: model.opacity, endHead: .none, points: freehandPoints)
+                        drawLive(stroke, in: ctx, fit: fit)
                     }
                     if let sel = model.selectedID,
                        let a = model.doc.items.first(where: { $0.id == sel }) {
@@ -304,6 +329,7 @@ struct EditorView: View {
                        let layer = model.imageLayers.first(where: { $0.id == selected }) {
                         drawLayerSelection(layer.rect, in: ctx, fit: fit)
                     }
+                    for guide in snapGuides { drawGuide(guide, in: ctx, fit: fit) }
                 }
                 .contentShape(Rectangle())
                 .gesture(dragGesture(fit: fit))
@@ -313,8 +339,11 @@ struct EditorView: View {
                     textEditor(for: a, fit: fit)
                 }
             }
-            .onDrop(of: [UTType.fileURL.identifier, UTType.image.identifier], isTargeted: nil) { providers in
-                importDroppedImage(providers)
+            .background(CanvasNavigation(
+                onPan: { delta in pan = CGSize(width: pan.width + delta.width, height: pan.height + delta.height) },
+                onZoom: { magnification in zoom = min(3, max(0.25, zoom * (1 + magnification))) }))
+            .onDrop(of: [UTType.fileURL.identifier, UTType.image.identifier], isTargeted: nil) { providers, location in
+                importDroppedImage(providers, at: toImage(location, fit: fit))
             }
         }
     }
@@ -323,6 +352,18 @@ struct EditorView: View {
     private var colorBinding: Binding<Color> {
         Binding(get: { Color(nsColor: nsColor(fromHex: model.colorHex)) },
                 set: { model.colorHex = hexString(fromNSColor: NSColor($0)) })
+    }
+
+    /// Arrow keys nudge the selection 1 px, or 10 px with Shift.
+    private func nudgeDelta(_ press: KeyPress) -> CGPoint? {
+        let step: CGFloat = press.modifiers.contains(.shift) ? 10 : 1
+        switch press.key {
+        case .leftArrow: return CGPoint(x: -step, y: 0)
+        case .rightArrow: return CGPoint(x: step, y: 0)
+        case .upArrow: return CGPoint(x: 0, y: -step)
+        case .downArrow: return CGPoint(x: 0, y: step)
+        default: return nil
+        }
     }
 
     private func selectTool(_ t: Tool) {
@@ -336,19 +377,26 @@ struct EditorView: View {
     }
 
     private var hasQuickStyles: Bool {
-        [.arrow, .line, .rect, .ellipse, .step].contains(model.tool)
+        [.arrow, .line, .rect, .ellipse, .step].contains(panelTool)
     }
 
     /// Per-tool preset grid (10+ each). One click applies a full recipe.
+    private var selectedAnnotation: Annotation? {
+        model.selectedID.flatMap { id in model.doc.items.first { $0.id == id } }
+    }
+    /// The panel edits the selected annotation when there is one, otherwise the active tool.
+    private var panelTool: Tool { selectedAnnotation?.tool ?? model.tool }
+    private func toolTitle(_ tool: Tool) -> String { tools.first { $0.0 == tool }?.2 ?? "Object" }
+
     @ViewBuilder private var quickStylesSection: some View {
         if hasQuickStyles {
             VStack(alignment: .leading, spacing: 8) {
                 Text("QUICK STYLES").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-                let presets = QuickStyle.presets(for: model.tool)
+                let presets = QuickStyle.presets(for: panelTool)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                     ForEach(Array(presets.enumerated()), id: \.offset) { _, s in
                         Button { apply(s) } label: {
-                            QuickStylePreview(style: s, tool: model.tool)
+                            QuickStylePreview(style: s, tool: panelTool)
                                 .frame(height: 40)
                                 .frame(maxWidth: .infinity)
                                 .background(active(s) ? Color.accentColor.opacity(0.22) : Color(nsColor: .controlBackgroundColor),
@@ -366,7 +414,7 @@ struct EditorView: View {
     private func active(_ s: QuickStyle) -> Bool {
         model.colorHex == s.color && model.lineStyle == s.lineStyle && model.filled == s.filled
             && model.startHead == s.startHead && model.endHead == s.endHead
-            && (model.tool != .step || model.stepStyle == s.stepStyle)
+            && (panelTool != .step || model.stepStyle == s.stepStyle)
     }
 
     private func apply(_ s: QuickStyle) {
@@ -380,7 +428,7 @@ struct EditorView: View {
     }
 
     @ViewBuilder private var stampControl: some View {
-        if model.tool == .stamp {
+        if panelTool == .stamp {
             VStack(alignment: .leading, spacing: 6) {
                 Text("STAMP").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 6), spacing: 4) {
@@ -398,7 +446,7 @@ struct EditorView: View {
     }
 
     @ViewBuilder private var arrowPropertiesSection: some View {
-        if model.tool == .arrow || model.tool == .line {
+        if panelTool == .arrow || panelTool == .line {
             Divider()
             Text("ARROW PROPERTIES").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
             LabeledContent("Start") {
@@ -422,7 +470,7 @@ struct EditorView: View {
     private var tipsBox: some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("TIPS", systemImage: "lightbulb.fill").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
-            Text("Select a tool, then click and drag on the image to annotate. Press 1–9 to switch tools.")
+            Text("Drag to annotate. Keys: A arrow · T text · R rect · E ellipse · S step · P pen · B blur · C crop · V select. Arrows nudge, ⌘ disables snapping.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(12)
@@ -431,7 +479,7 @@ struct EditorView: View {
     }
 
     @ViewBuilder private var stepStyleControl: some View {
-        if model.tool == .step {
+        if panelTool == .step {
             VStack(alignment: .leading, spacing: 6) {
                 Text("NUMBERING").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
                 Picker("", selection: $model.stepStyle) {
@@ -447,10 +495,13 @@ struct EditorView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 quickStylesSection
+                if panelTool != .crop && panelTool != .smartMove {
+                    MyStylesSection(model: model, tool: panelTool, selected: selectedAnnotation)
+                }
                 stepStyleControl
                 stampControl
                 Divider()
-                Text("Tool Properties").font(.headline)
+                Text(selectedAnnotation.map { "Selected \(toolTitle($0.tool))" } ?? "Tool Properties").font(.headline)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("COLOR").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
@@ -467,7 +518,7 @@ struct EditorView: View {
                     }
                 }
 
-                if model.tool == .rect || model.tool == .ellipse {
+                if panelTool == .rect || panelTool == .ellipse {
                     Toggle("Fill shape", isOn: $model.filled)
                 }
 
@@ -560,19 +611,27 @@ struct EditorView: View {
             .onChanged { value in
                 let start = toImage(value.startLocation, fit: fit)
                 let cur = toImage(value.location, fit: fit)
+                // A drag that starts on the selected annotation's handle resizes it in any mode.
+                if mode == .draw, draft == nil, freehandPoints.isEmpty,
+                   handleAnnotationResize(start: start, current: cur, fit: fit) { return }
                 if mode == .draw && model.tool == .pen {
                     if freehandPoints.isEmpty { freehandPoints = [start] }
                     if let last = freehandPoints.last, hypot(cur.x - last.x, cur.y - last.y) >= 1.5 {
                         freehandPoints.append(cur)
                     }
                 } else if mode == .draw { draft = (model.tool, start, cur) }
-                else if !handleLayerResize(start: start, current: cur, fit: fit) {
-                    handleMove(start: start, current: cur)
+                else if !handleLayerResize(start: start, current: cur, fit: fit),
+                        !handleAnnotationResize(start: start, current: cur, fit: fit) {
+                    handleMove(start: start, current: cur, fit: fit)
                 }
             }
             .onEnded { value in
                 let start = toImage(value.startLocation, fit: fit)
                 let end = toImage(value.location, fit: fit)
+                if mode == .draw, activeAnnotationHandle != nil {
+                    activeAnnotationHandle = nil; annotationDragOriginal = nil
+                    return
+                }
                 if mode == .draw {
                     draft = nil
                     if model.tool == .pen {
@@ -591,27 +650,51 @@ struct EditorView: View {
                         model.commit(tool: model.tool, start: start, end: end)
                     }
                 } else {
-                    if activeLayerHandle != nil {
+                    if activeLayerHandle != nil || activeAnnotationHandle != nil {
                         activeLayerHandle = nil; resizeStartRect = nil; moveAnchor = nil
+                        activeAnnotationHandle = nil; annotationDragOriginal = nil
                         return
                     }
                     selectObject(at: start)
-                    moveAnchor = nil
+                    moveAnchor = nil; moveOrigin = nil; snapGuides = []
                 }
             }
     }
 
-    private func handleMove(start: CGPoint, current: CGPoint) {
+    private func handleMove(start: CGPoint, current: CGPoint, fit: Fit) {
         if moveAnchor == nil {
             moveAnchor = start
+            // Snapshot before selecting so one undo restores both the raise and the move.
+            if hitTest(start) != nil || hitLayer(start) != nil { model.beginTransform() }
             selectObject(at: start)
-            if model.selectedID != nil || model.selectedLayerID != nil { model.beginTransform() }
+            moveOrigin = selectedObjectRect().map { (start, $0) }
         }
-        guard let anchor = moveAnchor else { return }
-        let dx = current.x - anchor.x, dy = current.y - anchor.y
+        guard let origin = moveOrigin, let now = selectedObjectRect() else { return }
+        let proposed = origin.rect.offsetBy(dx: current.x - origin.start.x, dy: current.y - origin.start.y)
+        // Hold ⌘ to place freely without snapping.
+        let target: CGRect
+        if NSEvent.modifierFlags.contains(.command) {
+            target = proposed; snapGuides = []
+        } else {
+            let result = SnapGuides.snap(proposed, to: otherObjectRects(), canvas: model.pixelSize,
+                                         threshold: 6 / max(fit.scale, 0.01))
+            target = result.rect; snapGuides = result.guides
+        }
+        let dx = target.minX - now.minX, dy = target.minY - now.minY
         if let id = model.selectedID { model.move(id: id, dx: dx, dy: dy) }
         else if let id = model.selectedLayerID { model.moveLayer(id: id, dx: dx, dy: dy) }
-        moveAnchor = current
+    }
+
+    /// Bounds of the current selection in image pixels.
+    private func selectedObjectRect() -> CGRect? {
+        if let annotation = selectedAnnotation { return boundingRect(annotation) }
+        return model.selectedLayer?.rect
+    }
+
+    /// Everything except the selection — what a dragged object can align to.
+    private func otherObjectRects() -> [CGRect] {
+        model.doc.items.filter { $0.id != model.selectedID }.map(boundingRect)
+            + model.imageLayers.filter { $0.id != model.selectedLayerID }.map(\.rect)
     }
 
     private func handleLayerResize(start: CGPoint, current: CGPoint, fit: Fit) -> Bool {
@@ -649,6 +732,21 @@ struct EditorView: View {
         return true
     }
 
+    /// Drag an endpoint or corner of the selected annotation. Returns false when the drag
+    /// didn't start on one of its handles.
+    private func handleAnnotationResize(start: CGPoint, current: CGPoint, fit: Fit) -> Bool {
+        if activeAnnotationHandle == nil {
+            guard moveAnchor == nil, let annotation = selectedAnnotation,
+                  let handle = AnnotationHandle.hit(start, on: annotation, tolerance: max(7, 10 / fit.scale))
+            else { return false }
+            activeAnnotationHandle = handle; annotationDragOriginal = annotation
+            model.beginTransform()
+        }
+        guard let handle = activeAnnotationHandle, let original = annotationDragOriginal else { return false }
+        model.replaceAnnotation(handle.dragged(original, to: current))
+        return true
+    }
+
     private func layerHandle(at point: CGPoint, rect: CGRect, tolerance: CGFloat) -> LayerResizeHandle? {
         let handles: [(LayerResizeHandle, CGPoint)] = [
             (.topLeft, CGPoint(x: rect.minX, y: rect.minY)),
@@ -663,7 +761,7 @@ struct EditorView: View {
         if let id = hitTest(point) {
             model.selectedID = id; model.selectedLayerID = nil
         } else if let id = hitLayer(point) {
-            model.selectedLayerID = id; model.selectedID = nil
+            model.focusLayer(id: id)
         } else {
             model.selectedID = nil; model.selectedLayerID = nil
         }
@@ -731,12 +829,12 @@ struct EditorView: View {
         }
     }
 
-    private func importDroppedImage(_ providers: [NSItemProvider]) -> Bool {
+    private func importDroppedImage(_ providers: [NSItemProvider], at point: CGPoint) -> Bool {
         if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.image.identifier) }) {
             provider.loadDataRepresentation(forTypeIdentifier: UTType.image.identifier) { data, _ in
                 guard let data, let image = NSImage(data: data),
                       let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-                Task { @MainActor in model.addImageLayer(cgImage); mode = .select }
+                Task { @MainActor in model.addImageLayer(cgImage, centeredAt: point); mode = .select }
             }
             return true
         }
@@ -747,7 +845,7 @@ struct EditorView: View {
                 }
                 guard let url, let image = NSImage(contentsOf: url),
                       let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-                Task { @MainActor in model.addImageLayer(cgImage); mode = .select }
+                Task { @MainActor in model.addImageLayer(cgImage, centeredAt: point); mode = .select }
             }
             return true
         }
@@ -849,14 +947,18 @@ struct EditorView: View {
 
     // MARK: Coordinate mapping
     struct Fit { var scale: CGFloat; var offset: CGPoint; var size: CGSize }
-    private func layout(in container: CGSize, zoom: CGFloat = 1) -> Fit {
+    private func layout(in container: CGSize, zoom: CGFloat = 1, pan: CGSize = .zero) -> Fit {
         let iw = model.pixelSize.width, ih = model.pixelSize.height
         guard iw > 0, ih > 0 else { return Fit(scale: 1, offset: .zero, size: .zero) }
         let pad: CGFloat = 28
         let avail = CGSize(width: max(1, container.width - pad * 2), height: max(1, container.height - pad * 2))
         let scale = min(avail.width / iw, avail.height / ih) * zoom
         let size = CGSize(width: iw * scale, height: ih * scale)
-        let offset = CGPoint(x: (container.width - size.width) / 2, y: (container.height - size.height) / 2)
+        // Pan only as far as the zoomed image overflows the view, so it can't be lost off-screen.
+        let maxX = max(0, (size.width - container.width) / 2 + pad)
+        let maxY = max(0, (size.height - container.height) / 2 + pad)
+        let offset = CGPoint(x: (container.width - size.width) / 2 + min(maxX, max(-maxX, pan.width)),
+                             y: (container.height - size.height) / 2 + min(maxY, max(-maxY, pan.height)))
         return Fit(scale: scale, offset: offset, size: size)
     }
     private func toImage(_ v: CGPoint, fit: Fit) -> CGPoint {
@@ -880,8 +982,13 @@ struct EditorView: View {
         let rect = CGRect(x: min(s.x, e.x), y: min(s.y, e.y), width: abs(e.x - s.x), height: abs(e.y - s.y))
         switch a.tool {
         case .pen:
-            var p = Path(); p.move(to: s); p.addLine(to: e)
-            ctx.stroke(p, with: .color(color), style: stroke)
+            var p = Path()
+            if a.points.count > 1 {
+                p.addLines(a.points.map { toView($0, fit: fit) })
+            } else {
+                p.move(to: s); p.addLine(to: e)
+            }
+            ctx.stroke(p, with: .color(color), style: StrokeStyle(lineWidth: lw, lineCap: .round, lineJoin: .round))
         case .line, .arrow:
             var p = Path(); p.move(to: s); p.addLine(to: e)
             ctx.stroke(p, with: .color(color), style: stroke)
@@ -976,6 +1083,25 @@ struct EditorView: View {
                        width: r.width * fit.scale, height: r.height * fit.scale).insetBy(dx: -4, dy: -4)
         ctx.stroke(Path(roundedRect: v, cornerRadius: 4), with: .color(.accentColor),
                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+        for (_, point) in AnnotationHandle.handles(for: a) {
+            let p = toView(point, fit: fit)
+            let knob = CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10)
+            ctx.fill(Path(ellipseIn: knob), with: .color(.white))
+            ctx.stroke(Path(ellipseIn: knob), with: .color(.accentColor), lineWidth: 2)
+        }
+    }
+
+    private func drawGuide(_ guide: SnapGuides.Guide, in ctx: GraphicsContext, fit: Fit) {
+        var path = Path()
+        switch guide.axis {
+        case .vertical:
+            path.move(to: toView(CGPoint(x: guide.position, y: guide.from), fit: fit))
+            path.addLine(to: toView(CGPoint(x: guide.position, y: guide.to), fit: fit))
+        case .horizontal:
+            path.move(to: toView(CGPoint(x: guide.from, y: guide.position), fit: fit))
+            path.addLine(to: toView(CGPoint(x: guide.to, y: guide.position), fit: fit))
+        }
+        ctx.stroke(path, with: .color(Color(nsColor: .systemPink)), lineWidth: 1)
     }
 
     private func drawLayerSelection(_ rect: CGRect, in ctx: GraphicsContext, fit: Fit) {
@@ -1012,6 +1138,7 @@ private struct EditorRecentThumbnail: View {
     let record: CaptureRecord
     @ObservedObject var model: EditorModel
     @State private var thumbnail: NSImage?
+    @State private var isHovered = false
 
     var body: some View {
         Button { addToCanvas() } label: {
@@ -1024,13 +1151,24 @@ private struct EditorRecentThumbnail: View {
                         } else { Image(systemName: "photo").foregroundStyle(.tertiary) }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 7))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(Theme.stroke, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 7)
+                        .stroke(isHovered ? Color.accentColor : Theme.stroke, lineWidth: isHovered ? 2 : 1))
+                    .overlay(alignment: .topTrailing) {
+                        if isHovered {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 15)).symbolRenderingMode(.multicolor)
+                                .padding(4).transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                    .scaleEffect(isHovered ? 1.04 : 1)
+                    .shadow(color: .black.opacity(isHovered ? 0.25 : 0), radius: 6, y: 3)
                 Text(record.title).font(.system(size: 8.5)).foregroundStyle(.secondary)
                     .lineLimit(1).frame(width: 112, alignment: .leading)
             }
         }
         .buttonStyle(.plain)
-        .help("Add this capture as a movable image layer")
+        .onHover { hovering in withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { isHovered = hovering } }
+        .help("Click to layer on top, ⌥-click to combine beside, or drag onto the canvas to place it")
         .onDrag { NSItemProvider(contentsOf: AppState.shared.library.fileURL(for: record)) ?? NSItemProvider() }
         .task { thumbnail = NSImage(contentsOf: AppState.shared.library.fileURL(for: record)) }
     }
@@ -1038,7 +1176,13 @@ private struct EditorRecentThumbnail: View {
     private func addToCanvas() {
         guard let image = NSImage(contentsOf: AppState.shared.library.fileURL(for: record)),
               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-        model.addImageLayer(cgImage)
-        Toast.show("Added as image layer", symbol: "photo.on.rectangle")
+        if NSEvent.modifierFlags.contains(.option) {
+            model.addImageBeside(cgImage)
+            Toast.show("Combined side by side — the canvas grew to fit", symbol: "rectangle.split.2x1")
+        } else {
+            model.addImageLayer(cgImage)
+            Toast.show("Layered on top — drag to position, click any image to bring it forward",
+                       symbol: "square.on.square")
+        }
     }
 }

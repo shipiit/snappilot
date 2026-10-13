@@ -81,7 +81,15 @@ enum AnnotationRenderer {
             color.withAlphaComponent(0.35 * a.opacity).set()
             NSBezierPath(rect: r).fill()
         case .pen:
-            strokePath(from: flipY(a.start, h), to: flipY(a.end, h), width: lw)
+            if a.points.count > 1 {
+                let path = NSBezierPath()
+                path.move(to: flipY(a.points[0], h))
+                a.points.dropFirst().forEach { path.line(to: flipY($0, h)) }
+                path.lineWidth = lw; path.lineCapStyle = .round; path.lineJoinStyle = .round
+                path.stroke()
+            } else {
+                strokePath(from: flipY(a.start, h), to: flipY(a.end, h), width: lw)
+            }
         case .text:
             drawText(a.text, at: flipY(a.start, h), color: color, size: max(14, lw * 6))
         case .callout:

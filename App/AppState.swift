@@ -62,17 +62,39 @@ final class AppState: ObservableObject {
 
     let library = LibraryStore()
 
-    @Published var ocrLanguages: [String] = ["en-US"]
-    @Published var recordSystemAudio = true
-    @Published var recordMic = false
-    @Published var recordNoiseCancellation = true
-    @Published var recordCamera = false
-    @Published var recordWebcamEffect: WebcamBackgroundEffect = .none
-    @Published var recordCursor = true
-    @Published var recordCursorHighlight = false
-    @Published var recordCountdown = true
-    @Published var recordQuality: RecordQuality = .balanced
-    @Published var captureDelay = 0        // seconds before a screenshot (0 = none)
+    @Published var ocrLanguages: [String] = Preference.value("pref.ocrLanguages", default: ["en-US"]) {
+        didSet { Preference.set(ocrLanguages, for: "pref.ocrLanguages") }
+    }
+    @Published var recordSystemAudio: Bool = Preference.value("pref.recordSystemAudio", default: true) {
+        didSet { Preference.set(recordSystemAudio, for: "pref.recordSystemAudio") }
+    }
+    @Published var recordMic: Bool = Preference.value("pref.recordMic", default: false) {
+        didSet { Preference.set(recordMic, for: "pref.recordMic") }
+    }
+    @Published var recordNoiseCancellation: Bool = Preference.value("pref.recordNoiseCancellation", default: true) {
+        didSet { Preference.set(recordNoiseCancellation, for: "pref.recordNoiseCancellation") }
+    }
+    @Published var recordCamera: Bool = Preference.value("pref.recordCamera", default: false) {
+        didSet { Preference.set(recordCamera, for: "pref.recordCamera") }
+    }
+    @Published var recordWebcamEffect: WebcamBackgroundEffect = Preference.value("pref.recordWebcamEffect", default: WebcamBackgroundEffect.none) {
+        didSet { Preference.set(recordWebcamEffect, for: "pref.recordWebcamEffect") }
+    }
+    @Published var recordCursor: Bool = Preference.value("pref.recordCursor", default: true) {
+        didSet { Preference.set(recordCursor, for: "pref.recordCursor") }
+    }
+    @Published var recordCursorHighlight: Bool = Preference.value("pref.recordCursorHighlight", default: false) {
+        didSet { Preference.set(recordCursorHighlight, for: "pref.recordCursorHighlight") }
+    }
+    @Published var recordCountdown: Bool = Preference.value("pref.recordCountdown", default: true) {
+        didSet { Preference.set(recordCountdown, for: "pref.recordCountdown") }
+    }
+    @Published var recordQuality: RecordQuality = Preference.value("pref.recordQuality", default: RecordQuality.balanced) {
+        didSet { Preference.set(recordQuality, for: "pref.recordQuality") }
+    }
+    @Published var captureDelay: Int = Preference.value("pref.captureDelay", default: 0) {
+        didSet { Preference.set(captureDelay, for: "pref.captureDelay") }
+    }
     @Published var capturePresets: [CapturePreset] = []
     @Published var isRecording = false
     @Published var isStepRecording = false
@@ -102,12 +124,20 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Mic/camera settings to put back after a preset's recording, so presets don't
+    /// permanently change the saved defaults.
+    private var presetOverride: (mic: Bool, camera: Bool)?
+
     func runPreset(_ preset: CapturePreset) {
+        restorePresetOverride()
         let previousDelay = captureDelay
         captureDelay = preset.delay
         defer { captureDelay = previousDelay } // preset delay is one-shot
-        recordMic = preset.recordMic
-        recordCamera = preset.recordCamera
+        if preset.action == .recordRegion || preset.action == .recordScreen {
+            presetOverride = (recordMic, recordCamera)
+            recordMic = preset.recordMic
+            recordCamera = preset.recordCamera
+        }
         switch preset.action {
         case .region: captureRegion()
         case .window: captureWindow()
@@ -117,6 +147,13 @@ final class AppState: ObservableObject {
         case .recordRegion: recordRegion()
         case .recordScreen: recordScreen()
         }
+    }
+
+    private func restorePresetOverride() {
+        guard let saved = presetOverride else { return }
+        presetOverride = nil
+        recordMic = saved.mic
+        recordCamera = saved.camera
     }
 
     /// Force the app's light/dark appearance, or follow the system.
@@ -362,6 +399,7 @@ final class AppState: ObservableObject {
         rec.onFinish = { [weak self] url in
             guard let self else { return }
             self.isRecording = false
+            self.restorePresetOverride()
             RecordingHUD.shared.hide()
             WebcamOverlay.shared.hide()
             RecordingFrame.shared.hide()
@@ -371,23 +409,45 @@ final class AppState: ObservableObject {
             let wasMeeting = self.meetingMode
             self.meetingMode = false
             let captionLines = wasMeeting ? MeetCaptionReader.shared.stop() : []
-            if let saved = self.library.saveVideo(from: url, width: saved_w, height: saved_h) {
-                Toast.show("Recording saved", symbol: "video.fill")
-                let fileURL = self.library.fileURL(for: saved)
-                if wasMeeting {
-                    self.generateMeetingNotes(url: fileURL, title: saved.title,
-                                              date: saved.createdAt,
-                                              hasParticipants: self.lastHadParticipants,
-                                              hasYou: self.lastHadYou,
-                                              preLines: captionLines, recordID: saved.id)
-                } else {
-                    VideoPreviewWindowController.present(url: fileURL, title: saved.title)
+            let size = (width: self.saved_w, height: self.saved_h)
+            // Meetings keep mic and system audio apart so notes can tell "You" from participants.
+            guard !wasMeeting else {
+                self.saveFinishedRecording(url, wasMeeting: true, captionLines: captionLines, size: size)
+                return
+            }
+            Task { @MainActor in
+                if (try? await AudioMixdown.audioTrackCount(of: url)) ?? 0 > 1 {
+                    Toast.show("Finishing recording…", symbol: "waveform")
                 }
-            } else {
-                Toast.show("Couldn't save recording", symbol: "exclamationmark.triangle.fill")
+                do { try await AudioMixdown.mixInPlace(url) } catch {
+                    Toast.show("Saved with separate audio tracks (mixdown failed)", symbol: "exclamationmark.triangle.fill")
+                }
+                self.saveFinishedRecording(url, wasMeeting: false, captionLines: [], size: size)
             }
         }
+        startRecordingStream(rec: rec, rect: rect, on: screen)
+    }
 
+    private func saveFinishedRecording(_ url: URL, wasMeeting: Bool, captionLines: [TranscriptLine],
+                                       size: (width: Int, height: Int)) {
+        if let saved = self.library.saveVideo(from: url, width: size.width, height: size.height) {
+            Toast.show("Recording saved", symbol: "video.fill")
+            let fileURL = self.library.fileURL(for: saved)
+            if wasMeeting {
+                self.generateMeetingNotes(url: fileURL, title: saved.title,
+                                          date: saved.createdAt,
+                                          hasParticipants: self.lastHadParticipants,
+                                          hasYou: self.lastHadYou,
+                                          preLines: captionLines, recordID: saved.id)
+            } else {
+                VideoPreviewWindowController.present(url: fileURL, title: saved.title)
+            }
+        } else {
+            Toast.show("Couldn't save recording", symbol: "exclamationmark.triangle.fill")
+        }
+    }
+
+    private func startRecordingStream(rec: RecordingController, rect: CGRect?, on screen: NSScreen) {
         Task {
             // Ask for mic / camera access gracefully — if denied, just drop that feature
             // instead of failing the whole recording.
@@ -415,6 +475,7 @@ final class AppState: ObservableObject {
                     onSnapshot: { [weak self] in self?.snapshotDuringRecording(rect: rect, on: screen) },
                     onPause: { [weak self] in self?.togglePause() })
             } catch {
+                restorePresetOverride()
                 WebcamOverlay.shared.hide()
                 RecordingFrame.shared.hide()
                 restoreOwnWindows()
@@ -630,10 +691,12 @@ final class AppState: ObservableObject {
             Toast.show("Couldn't open this capture", symbol: "exclamationmark.triangle.fill")
             return
         }
+        let project = library.loadProject(for: record)
         if let editor {
-            editor.load(image: cgImage, recordID: record.id)
+            editor.load(image: cgImage, recordID: record.id, project: project)
         } else {
-            let controller = EditorWindowController(image: cgImage, appState: self, recordID: record.id)
+            let controller = EditorWindowController(image: cgImage, appState: self, recordID: record.id,
+                                                    project: project)
             controller.onClose = { [weak self] _ in self?.editor = nil }
             editor = controller
             controller.showWindow(nil)

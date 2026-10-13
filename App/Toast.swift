@@ -45,6 +45,7 @@ enum Toast {
         win.contentView = container
         win.alphaValue = 0
         win.orderFrontRegardless()
+        RecordingController.shared.excludeFromRecording(win)
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.18; win.animator().alphaValue = 1
         }

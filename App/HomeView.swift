@@ -280,11 +280,11 @@ struct HomeView: View {
                         captureCard("Full Screen", "Capture your entire screen", "display", hotkeys.display(.captureFull), [C("#8B5CF6"), C("#6D28D9")]) { app.captureFullScreen() }
                         captureCard("Grab Text (OCR)", "Extract text from any area", "text.viewfinder", hotkeys.display(.grabText), [C("#22C55E"), C("#16A34A")]) { app.grabText() }
                         captureCard("Webcam Photo", "Capture a full-resolution camera still", "camera.fill", "NEW", [C("#14B8A6"), C("#0F766E")]) { app.captureWebcamPhoto() }
-                        captureCard("Step Recorder", "Capture every click into a numbered visual guide", "list.number", "AI", [C("#F59E0B"), C("#D97706")]) { app.startStepRecorder() }
+                        captureCard("Step Recorder", "Capture every click into a numbered visual guide", "list.number", "Auto", [C("#F59E0B"), C("#D97706")]) { app.startStepRecorder() }
                         captureCard("Scrolling Capture", "Capture a long page into one tall image", "arrow.down.doc", hotkeys.display(.scrollingCapture), [C("#0EA5E9"), C("#0284C7")]) { app.scrollingCapture() }
                         captureCard("Record Region", "Record a specific area", "record.circle", hotkeys.display(.recordRegion), [C("#F97316"), C("#EF4444")]) { app.toggleRecordRegion() }
                         captureCard("Record Screen", "Record your entire screen", "rectangle.badge.record", hotkeys.display(.recordScreen), [C("#EC4899"), C("#DB2777")]) { app.toggleRecordScreen() }
-                        captureCard("Record Meeting", "Record a call, then auto-transcribe & get tasks", "person.2.wave.2.fill", app.generatingNotes ? "Working…" : "AI", [C("#6366F1"), C("#4F46E5")]) { app.recordMeeting() }
+                        captureCard("Record Meeting", "Record a call, then auto-transcribe & get tasks", "person.2.wave.2.fill", app.generatingNotes ? "Working…" : "Notes", [C("#6366F1"), C("#4F46E5")]) { app.recordMeeting() }
                 }
 
                 recordingBar
@@ -295,8 +295,8 @@ struct HomeView: View {
                     searchField.frame(width: 280)
                     Button { openPDFPicker() } label: { Label("PDF", systemImage: "doc.richtext") }
                         .buttonStyle(.bordered).controlSize(.large).help("Pick images and export a PDF")
-                    Button { newFolder() } label: { Label("New Folder", systemImage: "folder.badge.plus") }
-                        .buttonStyle(.bordered).controlSize(.large)
+                    Button { newCollection() } label: { Label("New Collection", systemImage: "folder.badge.plus") }
+                        .buttonStyle(.bordered).controlSize(.large).help("Group captures into a collection")
                 }
                 galleryGrid(records: Array(filtered(library.records).prefix(8)))
             }
@@ -697,12 +697,6 @@ struct HomeView: View {
         return t.isEmpty ? nil : t
     }
 
-    private func newFolder() {
-        let url = library.root.appendingPathComponent("New Folder \(library.records.count + 1)")
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        NSWorkspace.shared.open(url)
-    }
-
     private var pdfImages: [CaptureRecord] { library.records.filter { $0.kind == .image } }
 
     private func openPDFPicker() {
@@ -960,7 +954,7 @@ private struct GalleryCard: View {
                                                              title: record.title, date: record.createdAt, recordID: record.id)
                             }
                         } else {
-                            Button("Meeting Notes (AI)") {
+                            Button("Meeting Notes") {
                                 app.generateNotesForExisting(url: library.fileURL(for: record),
                                                              title: record.title, date: record.createdAt, recordID: record.id)
                             }

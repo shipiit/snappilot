@@ -91,6 +91,7 @@ final class RecordingHUD {
 
         win.contentView = bg
         win.orderFrontRegardless()
+        RecordingController.shared.excludeFromRecording(win)
         window = win
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in

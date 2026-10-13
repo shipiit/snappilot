@@ -20,17 +20,17 @@ final class EditorModel: ObservableObject {
 
     @Published var doc = AnnotationDocument()
     @Published var tool: Tool = .arrow
-    @Published var colorHex = "#FF3B30"
-    @Published var thickness: Double = 4
-    @Published var filled = false
-    @Published var opacity: Double = 1
-    @Published var stepStyle: StepStyle = .number
-    @Published var lineStyle: LineStyle = .solid
-    @Published var startHead: ArrowHead = .none
-    @Published var endHead: ArrowHead = .arrow
-    @Published var arrowSize: ArrowSize = .medium
+    @Published var colorHex = "#FF3B30" { didSet { restyleSelection() } }
+    @Published var thickness: Double = 4 { didSet { restyleSelection() } }
+    @Published var filled = false { didSet { restyleSelection() } }
+    @Published var opacity: Double = 1 { didSet { restyleSelection() } }
+    @Published var stepStyle: StepStyle = .number { didSet { restyleSelection() } }
+    @Published var lineStyle: LineStyle = .solid { didSet { restyleSelection() } }
+    @Published var startHead: ArrowHead = .none { didSet { restyleSelection() } }
+    @Published var endHead: ArrowHead = .arrow { didSet { restyleSelection() } }
+    @Published var arrowSize: ArrowSize = .medium { didSet { restyleSelection() } }
     @Published var stamp = "⭐️"
-    @Published var selectedID: Int?
+    @Published var selectedID: Int? { didSet { if selectedID != oldValue { syncStyleFromSelection() } } }
     @Published var editingTextID: Int?
     @Published var imageLayers: [ImageLayer] = []
     @Published var selectedLayerID: Int?
@@ -40,6 +40,12 @@ final class EditorModel: ObservableObject {
     private struct Snapshot { var doc: AnnotationDocument; var base: CGImage; var imageLayers: [ImageLayer] }
     private var undoStack: [Snapshot] = []
     private var redoStack: [Snapshot] = []
+    /// Edits made since the image was last written to the library.
+    private(set) var hasUnsavedChanges = false
+    /// True while the panel is being loaded from a selection, so it doesn't restyle it back.
+    private var isSyncingStyle = false
+    /// The selection whose restyle already has an undo snapshot (one undo step per restyle).
+    private var restyledSelectionID: Int?
 
     init(base: CGImage, appState: AppState?) {
         self.base = base
@@ -53,6 +59,36 @@ final class EditorModel: ObservableObject {
     private func snapshot() {
         undoStack.append(Snapshot(doc: doc, base: base, imageLayers: imageLayers))
         redoStack.removeAll()
+        hasUnsavedChanges = true
+        restyledSelectionID = nil
+    }
+
+    /// The panel's current style — used for new annotations and for restyling a selection.
+    var currentStyle: AnnotationStyle {
+        AnnotationStyle(colorHex: colorHex, thickness: thickness, filled: filled, opacity: opacity,
+                        stepStyle: stepStyle, lineStyle: lineStyle, startHead: startHead,
+                        endHead: endHead, arrowSize: arrowSize)
+    }
+
+    /// Selecting an annotation loads its style into the panel.
+    private func syncStyleFromSelection() {
+        restyledSelectionID = nil
+        guard let id = selectedID, let a = doc.items.first(where: { $0.id == id }) else { return }
+        isSyncingStyle = true
+        defer { isSyncingStyle = false }
+        colorHex = a.colorHex; thickness = a.thickness; filled = a.filled; opacity = a.opacity
+        stepStyle = a.stepStyle; lineStyle = a.lineStyle
+        startHead = a.startHead; endHead = a.endHead; arrowSize = a.arrowSize
+    }
+
+    /// Panel edits apply to the selected annotation, Snagit-style.
+    private func restyleSelection() {
+        guard !isSyncingStyle, let id = selectedID,
+              let a = doc.items.first(where: { $0.id == id }) else { return }
+        let style = currentStyle
+        guard style.applied(to: a) != a else { return }
+        if restyledSelectionID != id { snapshot(); restyledSelectionID = id }
+        doc.restyle(id: id, to: style)
     }
 
     /// Commit a finished drag as a new annotation. Returns its id.
@@ -89,14 +125,15 @@ final class EditorModel: ObservableObject {
     }
 
     func move(id: Int, dx: CGFloat, dy: CGFloat) {
-        doc.update(id: id) {
-            $0.start.x += dx; $0.start.y += dy
-            $0.end.x += dx; $0.end.y += dy
-        }
-        objectWillChange.send()
+        doc.translate(id: id, dx: dx, dy: dy)
     }
 
     func beginTransform() { snapshot() }
+
+    /// Swap in an edited copy of an annotation (same id), e.g. while dragging a handle.
+    func replaceAnnotation(_ annotation: Annotation) {
+        doc.update(id: annotation.id) { $0 = annotation }
+    }
 
     func extractForSmartMove(start: CGPoint, end: CGPoint) {
         let rect = selectionRect(from: start, to: end).intersection(
@@ -207,16 +244,20 @@ final class EditorModel: ObservableObject {
         }
     }
 
-    /// Place an external image as a movable overlay, scaled to fit comfortably on the canvas.
-    func addImageLayer(_ image: CGImage, centeredAt point: CGPoint? = nil) {
+    /// Place an external image as a movable overlay on top of everything else. Dropped images
+    /// land under the pointer; clicked ones cascade so each new image overlaps the last.
+    func addImageLayer(_ image: CGImage, centeredAt point: CGPoint? = nil, clampToCanvas: Bool = true) {
         snapshot()
-        let maxSize = CGSize(width: CGFloat(base.width) * 0.55, height: CGFloat(base.height) * 0.55)
-        let scale = min(1, maxSize.width / CGFloat(image.width), maxSize.height / CGFloat(image.height))
-        let size = CGSize(width: max(24, CGFloat(image.width) * scale),
-                          height: max(24, CGFloat(image.height) * scale))
-        let center = point ?? CGPoint(x: CGFloat(base.width) / 2, y: CGFloat(base.height) / 2)
-        let rect = CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2,
-                          width: size.width, height: size.height)
+        let natural = CGSize(width: image.width, height: image.height)
+        let size = clampToCanvas ? LayerPlacement.fittedSize(natural, canvas: pixelSize) : natural
+        let rect: CGRect
+        if let point, !clampToCanvas {
+            rect = CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height)
+        } else if let point {
+            rect = LayerPlacement.rect(size: size, centeredAt: point, in: pixelSize)
+        } else {
+            rect = LayerPlacement.cascadedRect(size: size, in: pixelSize, existing: imageLayers.map(\.rect))
+        }
         let layer = ImageLayer(id: nextLayerID, image: image, rect: rect)
         nextLayerID += 1
         imageLayers.append(layer)
@@ -247,11 +288,9 @@ final class EditorModel: ObservableObject {
     func commitPen(points: [CGPoint]) {
         guard points.count > 1 else { return }
         snapshot()
-        for pair in zip(points, points.dropFirst()) {
-            doc.add(.pen, start: pair.0, end: pair.1, colorHex: colorHex,
-                    thickness: thickness, opacity: opacity, lineStyle: .solid,
-                    startHead: .none, endHead: .none)
-        }
+        var style = currentStyle
+        style.lineStyle = .solid; style.startHead = .none; style.endHead = .none
+        doc.addStroke(points, style: style)
     }
 
     func duplicateSelected() {
@@ -264,6 +303,13 @@ final class EditorModel: ObservableObject {
         } else if let id = selectedID {
             snapshot(); selectedID = doc.duplicate(id: id)?.id
         }
+    }
+
+    /// Select an overlay and raise it above the others, as clicking a window does.
+    func focusLayer(id: Int) {
+        selectedLayerID = id; selectedID = nil
+        guard let index = imageLayers.firstIndex(where: { $0.id == id }) else { return }
+        LayerPlacement.bringToFront(&imageLayers, index: index)
     }
 
     func bringSelectedToFront() {
@@ -426,6 +472,7 @@ final class EditorModel: ObservableObject {
         doc = prev.doc; base = prev.base; imageLayers = prev.imageLayers
         nextLayerID = (imageLayers.map(\.id).max() ?? 0) + 1
         selectedID = nil; selectedLayerID = nil; editingTextID = nil
+        hasUnsavedChanges = true
     }
     func redo() {
         guard let next = redoStack.popLast() else { return }
@@ -433,9 +480,12 @@ final class EditorModel: ObservableObject {
         doc = next.doc; base = next.base; imageLayers = next.imageLayers
         nextLayerID = (imageLayers.map(\.id).max() ?? 0) + 1
         selectedID = nil; selectedLayerID = nil; editingTextID = nil
+        hasUnsavedChanges = true
     }
 
-    @Published var framed = false
+    @Published var framed = false { didSet { if framed != oldValue { hasUnsavedChanges = true } } }
+    /// Rounded-corner radius in pixels applied on export (0 = square).
+    @Published var cornerRadius: Double = 0 { didSet { if cornerRadius != oldValue { hasUnsavedChanges = true } } }
 
     /// When set, the editor is annotating a video frame — Done bakes this overlay onto the
     /// clip instead of saving an image.
@@ -484,7 +534,8 @@ final class EditorModel: ObservableObject {
     /// The image to copy/save — flattened annotations, optionally wrapped in a polished frame.
     func exportImage() -> CGImage {
         let flat = flattened()
-        return framed ? ImagePolish.frame(flat) : flat
+        let rounded = cornerRadius > 0 ? (ImageOps.roundedCorners(flat, radius: cornerRadius) ?? flat) : flat
+        return framed ? ImagePolish.frame(rounded) : rounded
     }
 
     /// Write the current (annotated) image back into its library record, refreshing OCR.
@@ -501,7 +552,42 @@ final class EditorModel: ObservableObject {
         } else if let rec = store.saveImage(flat) {
             libraryRecordID = rec.id
         }
+        if let id = libraryRecordID {
+            if doc.isEmpty && imageLayers.isEmpty && !framed && cornerRadius == 0 {
+                store.removeProject(recordID: id)
+            } else {
+                store.saveProject(recordID: id, project: currentProject(), base: base,
+                                  layerImages: Dictionary(uniqueKeysWithValues: imageLayers.map { ($0.id, $0.image) }))
+            }
+        }
+        hasUnsavedChanges = false
     }
+
+    private func currentProject() -> EditorProject {
+        EditorProject(doc: doc,
+                      layers: imageLayers.map { .init(id: $0.id, rect: $0.rect, opacity: $0.opacity, name: $0.name) },
+                      framed: framed, cornerRadius: cornerRadius > 0 ? cornerRadius : nil)
+    }
+
+    /// Reopen a saved project: live annotations and layers over the original image.
+    func restore(_ loaded: EditorProject.Loaded) {
+        base = loaded.base
+        doc = loaded.project.doc
+        imageLayers = loaded.project.layers.compactMap { layer in
+            loaded.layerImages[layer.id].map {
+                ImageLayer(id: layer.id, image: $0, rect: layer.rect, opacity: layer.opacity, name: layer.name)
+            }
+        }
+        nextLayerID = (imageLayers.map(\.id).max() ?? 0) + 1
+        framed = loaded.project.framed
+        cornerRadius = loaded.project.cornerRadius ?? 0
+        undoStack.removeAll(); redoStack.removeAll()
+        selectedID = nil; selectedLayerID = nil; editingTextID = nil
+        hasUnsavedChanges = false
+    }
+
+    /// Forget unsaved edits so the window can close without prompting again.
+    func discardChanges() { hasUnsavedChanges = false }
 
     /// Load a brand-new capture into this same editor (reusing one window).
     func reset(base newBase: CGImage, recordID: String?) {
@@ -512,6 +598,8 @@ final class EditorModel: ObservableObject {
         undoStack.removeAll(); redoStack.removeAll()
         selectedID = nil; editingTextID = nil
         framed = false
+        cornerRadius = 0
+        hasUnsavedChanges = false
     }
 
     /// OCR the image, find emails / card numbers, and blur them out automatically.
