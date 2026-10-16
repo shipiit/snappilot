@@ -608,9 +608,8 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12).fill(Theme.panelBG).frame(height: 120)
-                    if let first = members.first, let img = NSImage(contentsOf: library.fileURL(for: first)) {
-                        Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
-                            .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 12))
+                    if let first = members.first {
+                        CollectionCover(url: library.fileURL(for: first), isVideo: first.kind != .image)
                     } else {
                         Image(systemName: "folder").font(.system(size: 34)).foregroundStyle(.tertiary)
                     }
@@ -804,14 +803,17 @@ struct HomeView: View {
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         var saved = 0
         for record in pdfImages where batchSelection.contains(record.id) {
-            guard let image = NSImage(contentsOf: library.fileURL(for: record)),
-                  var rect = Optional(NSRect(origin: .zero, size: image.size)),
-                  let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { continue }
-            let output = batchFramed ? ImagePolish.frame(cg) : cg
-            guard let data = Exporter.data(output, format: batchFormat) else { continue }
-            let safeName = record.title.replacingOccurrences(of: "/", with: "-")
-            let destination = folder.appendingPathComponent("\(safeName)-\(record.id.suffix(4)).\(batchFormat.ext)")
-            if (try? data.write(to: destination, options: .atomic)) != nil { saved += 1 }
+            // Release each full-size image before decoding the next.
+            autoreleasepool {
+                guard let image = NSImage(contentsOf: library.fileURL(for: record)),
+                      var rect = Optional(NSRect(origin: .zero, size: image.size)),
+                      let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { return }
+                let output = batchFramed ? ImagePolish.frame(cg) : cg
+                guard let data = Exporter.data(output, format: batchFormat) else { return }
+                let safeName = record.title.replacingOccurrences(of: "/", with: "-")
+                let destination = folder.appendingPathComponent("\(safeName)-\(record.id.suffix(4)).\(batchFormat.ext)")
+                if (try? data.write(to: destination, options: .atomic)) != nil { saved += 1 }
+            }
         }
         showBatchSheet = false
         Toast.show("Exported \(saved) image\(saved == 1 ? "" : "s")", symbol: "checkmark.circle.fill")
@@ -846,7 +848,8 @@ private struct PDFPickCell: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { toggle() }
-        .task { thumb = NSImage(contentsOf: library.fileURL(for: record)) }
+        .task { thumb = await ThumbnailCache.shared.thumbnail(for: library.fileURL(for: record)) }
+        .onDisappear { thumb = nil }
     }
 }
 
@@ -985,14 +988,11 @@ private struct GalleryCard: View {
             }
         }
         .onDrag { NSItemProvider(object: record.id as NSString) }
-        .task {
-            let url = library.fileURL(for: record)
-            if record.kind == .image {
-                thumb = NSImage(contentsOf: url)
-            } else if let cg = await VideoAnnotator.grabFrame(from: url) {
-                thumb = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-            }
+        .task(id: record.fileName) {
+            thumb = await ThumbnailCache.shared.thumbnail(for: library.fileURL(for: record),
+                                                          isVideo: record.kind != .image)
         }
+        .onDisappear { thumb = nil }   // let the capped cache own off-screen previews
     }
 
     private func iconButton(_ icon: String, _ help: String, _ action: @escaping () -> Void) -> some View {
@@ -1024,5 +1024,25 @@ private struct GalleryCard: View {
         Text(t).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(Theme.chipBG, in: RoundedRectangle(cornerRadius: 5))
+    }
+}
+
+/// A collection's cover tile, loaded as a cached thumbnail instead of decoding in `body`.
+private struct CollectionCover: View {
+    let url: URL
+    let isVideo: Bool
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                    .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                Image(systemName: "photo").font(.system(size: 28)).foregroundStyle(.tertiary)
+            }
+        }
+        .task(id: url) { image = await ThumbnailCache.shared.thumbnail(for: url, isVideo: isVideo) }
+        .onDisappear { image = nil }
     }
 }

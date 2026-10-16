@@ -1170,7 +1170,8 @@ private struct EditorRecentThumbnail: View {
         .onHover { hovering in withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { isHovered = hovering } }
         .help("Click to layer on top, ⌥-click to combine beside, or drag onto the canvas to place it")
         .onDrag { NSItemProvider(contentsOf: AppState.shared.library.fileURL(for: record)) ?? NSItemProvider() }
-        .task { thumbnail = NSImage(contentsOf: AppState.shared.library.fileURL(for: record)) }
+        .task { thumbnail = await ThumbnailCache.shared.thumbnail(for: AppState.shared.library.fileURL(for: record)) }
+        .onDisappear { thumbnail = nil }
     }
 
     private func addToCanvas() {

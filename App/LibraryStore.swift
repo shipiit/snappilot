@@ -451,6 +451,7 @@ final class LibraryStore: ObservableObject {
     func overwrite(id: String, image: CGImage) {
         guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
         _ = writePNG(image, to: fileURL(for: records[idx]))
+        ThumbnailCache.shared.invalidate(fileURL(for: records[idx]))
         records[idx].width = image.width
         records[idx].height = image.height
         let rec = records.remove(at: idx)
