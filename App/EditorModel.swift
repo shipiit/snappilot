@@ -56,8 +56,12 @@ final class EditorModel: ObservableObject {
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
 
+    /// Each step can hold a full-size image (after crop/resize/background edits), so history is capped.
+    private static let undoLimit = 50
+
     private func snapshot() {
         undoStack.append(Snapshot(doc: doc, base: base, imageLayers: imageLayers))
+        if undoStack.count > Self.undoLimit { undoStack.removeFirst(undoStack.count - Self.undoLimit) }
         redoStack.removeAll()
         hasUnsavedChanges = true
         restyledSelectionID = nil

@@ -2,6 +2,7 @@ import SnapCore
 import CoreGraphics
 import Foundation
 import AppKit
+import ImageIO
 import AVFoundation
 
 var failures = 0
@@ -631,6 +632,41 @@ if let square = renderSolid(width: 40, height: 40), let rounded = ImageOps.round
 if let legacy = try? JSONDecoder().decode(EditorProject.self, from: Data(#"{"version":1,"doc":{"items":[],"nextID":1,"nextStep":1},"layers":[],"framed":false}"#.utf8)) {
     check(legacy.cornerRadius == nil, "projects saved before rounded corners still load")
 } else { check(false, "legacy project decodes") }
+
+// MARK: Thumbnails
+do {
+    let thumbDir = FileManager.default.temporaryDirectory.appendingPathComponent("snapverify-thumb-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: thumbDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: thumbDir) }
+    func writeFixture(_ name: String, width: Int, height: Int) -> URL? {
+        let url = thumbDir.appendingPathComponent(name)
+        guard let image = renderSolid(width: width, height: height),
+              let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, image, nil)
+        return CGImageDestinationFinalize(dest) ? url : nil
+    }
+    if let wide = writeFixture("wide.png", width: 3000, height: 1500) {
+        let thumb = Thumbnail.make(at: wide, maxPixelSize: 600)
+        check(thumb?.width == 600 && thumb?.height == 300, "thumbnail fits the longest side, keeping aspect (got \(thumb?.width ?? 0)x\(thumb?.height ?? 0))")
+        if let thumb, let full = renderSolid(width: 3000, height: 1500) {
+            check(Thumbnail.byteCost(of: thumb) * 20 < Thumbnail.byteCost(of: full), "thumbnail costs a fraction of the full decode")
+        }
+        check(Thumbnail.make(at: wide, maxPixelSize: 0) == nil, "zero size is rejected")
+    }
+    if let tall = writeFixture("tall.png", width: 400, height: 2000) {
+        check(Thumbnail.make(at: tall, maxPixelSize: 500)?.height == 500, "tall images are limited by height")
+    }
+    if let small = writeFixture("small.png", width: 120, height: 80) {
+        let thumb = Thumbnail.make(at: small, maxPixelSize: 600)
+        check(thumb?.width == 120 && thumb?.height == 80, "small images are never upscaled")
+    }
+    check(Thumbnail.make(at: thumbDir.appendingPathComponent("missing.png"), maxPixelSize: 600) == nil, "missing file returns nil")
+    let notImage = thumbDir.appendingPathComponent("notes.txt")
+    try Data("hello".utf8).write(to: notImage)
+    check(Thumbnail.make(at: notImage, maxPixelSize: 600) == nil, "non-image file returns nil")
+} catch {
+    check(false, "thumbnail fixtures threw: \(error)")
+}
 
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
