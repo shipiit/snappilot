@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/banner.png" alt="Snappilot" width="100%">
+  <img src="docs/assets/hero.jpg" alt="Snappilot 0.2 — capture, annotate, record, private by design. The dashboard on a MacBook, with region capture, blur and screen recording." width="100%">
 </p>
 
 <h1 align="center">Snappilot</h1>
