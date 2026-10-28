@@ -5,6 +5,7 @@ struct QuickCaptureGrid: View {
     @EnvironmentObject var app: AppState
     @ObservedObject private var hotkeys = HotkeyStore.shared
     let openShortcuts: () -> Void
+    @AppStorage("dashboard.quickCaptureExpanded") private var expanded = false
 
     private struct Tool: Identifiable {
         let title: String, detail: String, icon: String, badge: String, colors: [String]
@@ -15,17 +16,30 @@ struct QuickCaptureGrid: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Quick Capture").font(.system(size: 20, weight: .semibold))
-                    Text("One-click tools to capture and extract content.").font(.system(size: 13)).foregroundStyle(.secondary)
+                Button { withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() } } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold))
+                            .rotationEffect(.degrees(expanded ? 90 : 0)).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Quick Capture").font(.system(size: 20, weight: .semibold))
+                            Text("One-click tools to capture and extract content.").font(.system(size: 13)).foregroundStyle(.secondary)
+                        }
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(expanded ? "Collapse Quick Capture" : "Expand Quick Capture")
                 Spacer()
                 delayControl
                 Button(action: openShortcuts) { Label("Add shortcut", systemImage: "plus") }
                     .buttonStyle(.borderless).foregroundStyle(Color.accentColor)
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
-                ForEach(tools) { card($0) }
+            if expanded {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
+                    ForEach(tools) { card($0) }
+                }
+            } else {
+                compactRow
             }
         }
     }
@@ -54,6 +68,23 @@ struct QuickCaptureGrid: View {
             Tool(title: "Step Recorder", detail: "Capture every click into a visual guide", icon: "list.number",
                  badge: "Auto", colors: ["#D97706", "#F59E0B"]) { app.startStepRecorder() },
         ]
+    }
+
+    /// Collapsed: one slim row of the same tools.
+    private var compactRow: some View {
+        HStack(spacing: 8) {
+            ForEach(tools) { tool in
+                Button(action: tool.action) {
+                    Image(systemName: tool.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).frame(height: 40)
+                        .background(LinearGradient(colors: tool.colors.map(hexColor), startPoint: .topLeading, endPoint: .bottomTrailing),
+                                    in: RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(QuickCaptureButtonStyle())
+                .help(tool.badge.isEmpty || tool.badge == "NEW" || tool.badge == "Auto" ? tool.title : "\(tool.title) · \(tool.badge)")
+                .accessibilityLabel(tool.title)
+            }
+        }
     }
 
     private var delayControl: some View {
@@ -85,6 +116,7 @@ struct QuickCaptureGrid: View {
                         Spacer(minLength: 2)
                         if !tool.badge.isEmpty {
                             Text(tool.badge).font(.system(size: 10, weight: .bold, design: .rounded))
+                                .lineLimit(1).fixedSize()
                                 .padding(.horizontal, 6).padding(.vertical, 2)
                                 .background(.white.opacity(0.2), in: Capsule())
                         }

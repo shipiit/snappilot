@@ -19,13 +19,14 @@ final class ThumbnailCache: @unchecked Sendable {
     /// A cached preview, or nil if it still needs loading.
     func cached(_ url: URL) -> NSImage? { cache.object(forKey: url as NSURL) }
 
-    /// Load (or reuse) a preview for an image or video file.
+    /// Load (or reuse) a preview for an image or video file. Called from views on the main actor.
+    @MainActor
     func thumbnail(for url: URL, isVideo: Bool = false) async -> NSImage? {
         if let hit = cached(url) { return hit }
-        let image: CGImage? = isVideo
+        let decoded: DecodedImage = isVideo
             ? await Self.videoFrame(url)
-            : await Task.detached(priority: .utility) { Thumbnail.make(at: url, maxPixelSize: Self.tileSize) }.value
-        guard let image else { return nil }
+            : await Task.detached(priority: .utility) { DecodedImage(Thumbnail.make(at: url, maxPixelSize: Self.tileSize)) }.value
+        guard let image = decoded.image else { return nil }
         let preview = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
         cache.setObject(preview, forKey: url as NSURL, cost: Thumbnail.byteCost(of: image))
         return preview
@@ -34,12 +35,18 @@ final class ThumbnailCache: @unchecked Sendable {
     /// Drop a stale preview after the file was edited or replaced.
     func invalidate(_ url: URL) { cache.removeObject(forKey: url as NSURL) }
 
-    private static func videoFrame(_ url: URL) async -> CGImage? {
+    /// CGImage is immutable, so handing one across threads is safe.
+    private struct DecodedImage: @unchecked Sendable {
+        let image: CGImage?
+        init(_ image: CGImage?) { self.image = image }
+    }
+
+    nonisolated private static func videoFrame(_ url: URL) async -> DecodedImage {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: tileSize, height: tileSize)
         let seconds = (try? await asset.load(.duration).seconds) ?? 0
-        return try? await generator.image(at: CMTime(seconds: max(0, seconds / 2), preferredTimescale: 600)).image
+        return DecodedImage(try? await generator.image(at: CMTime(seconds: max(0, seconds / 2), preferredTimescale: 600)).image)
     }
 }

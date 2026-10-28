@@ -76,7 +76,7 @@ final class EditorModel: ObservableObject {
         undoStack.append(Snapshot(doc: doc, base: base, imageLayers: imageLayers))
         if undoStack.count > Self.undoLimit { undoStack.removeFirst(undoStack.count - Self.undoLimit) }
         redoStack.removeAll()
-        undoManager.registerUndo(withTarget: self) { $0.undoFromManager() }
+        undoManager.registerUndo(withTarget: self) { target in MainActor.assumeIsolated { target.undoFromManager() } }
         hasUnsavedChanges = true
         restyledSelectionID = nil
     }
@@ -492,11 +492,11 @@ final class EditorModel: ObservableObject {
 
     private func undoFromManager() {
         applyUndo()
-        undoManager.registerUndo(withTarget: self) { $0.redoFromManager() }
+        undoManager.registerUndo(withTarget: self) { target in MainActor.assumeIsolated { target.redoFromManager() } }
     }
     private func redoFromManager() {
         applyRedo()
-        undoManager.registerUndo(withTarget: self) { $0.undoFromManager() }
+        undoManager.registerUndo(withTarget: self) { target in MainActor.assumeIsolated { target.undoFromManager() } }
     }
 
     private func applyUndo() {
