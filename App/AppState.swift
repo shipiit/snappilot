@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 import SwiftUI
 @preconcurrency import ScreenCaptureKit
 import AVFoundation
@@ -94,6 +95,37 @@ final class AppState: ObservableObject {
     }
     @Published var captureDelay: Int = Preference.value("pref.captureDelay", default: 0) {
         didSet { Preference.set(captureDelay, for: "pref.captureDelay") }
+    }
+    /// Format new captures are saved in to the library (issue #2).
+    @Published var captureFormat: CaptureFormat = Preference.value("pref.captureFormat", default: CaptureFormat.png) {
+        didSet { Preference.set(captureFormat, for: "pref.captureFormat") }
+    }
+    /// JPEG/HEIC quality, 0.1…1.
+    @Published var captureQuality: Double = Preference.value("pref.captureQuality", default: CaptureEncoder.defaultQuality) {
+        didSet { Preference.set(captureQuality, for: "pref.captureQuality") }
+    }
+    @Published var afterCapture: AfterCaptureAction = Preference.value("pref.afterCapture", default: AfterCaptureAction.openEditor) {
+        didSet { Preference.set(afterCapture, for: "pref.afterCapture") }
+    }
+    /// Copy every screenshot to the clipboard as well (when the editor opens).
+    @Published var alsoCopyCapture: Bool = Preference.value("pref.alsoCopyCapture", default: false) {
+        didSet { Preference.set(alsoCopyCapture, for: "pref.alsoCopyCapture") }
+    }
+    @Published var captureSound: Bool = Preference.value("pref.captureSound", default: true) {
+        didSet { Preference.set(captureSound, for: "pref.captureSound") }
+    }
+    @Published var captureCursor: Bool = Preference.value(CaptureSettings.cursorKey, default: false) {
+        didSet { Preference.set(captureCursor, for: CaptureSettings.cursorKey) }
+    }
+    @Published var captureWindowShadow: Bool = Preference.value(CaptureSettings.shadowKey, default: true) {
+        didSet { Preference.set(captureWindowShadow, for: CaptureSettings.shadowKey) }
+    }
+    @Published var captureMagnifier: Bool = Preference.value("pref.captureMagnifier", default: true) {
+        didSet { Preference.set(captureMagnifier, for: "pref.captureMagnifier") }
+    }
+    /// Open the player when a (non-meeting) recording finishes.
+    @Published var openPlayerAfterRecording: Bool = Preference.value("pref.openPlayerAfterRecording", default: true) {
+        didSet { Preference.set(openPlayerAfterRecording, for: "pref.openPlayerAfterRecording") }
     }
     @Published var capturePresets: [CapturePreset] = []
     @Published var isRecording = false
@@ -208,7 +240,7 @@ final class AppState: ObservableObject {
 
     // MARK: Capture entry points (called from menu bar + hotkeys)
 
-    func captureRegion() { withCaptureDelay { self.runRegion { result in self.openEditor(with: result) } } }
+    func captureRegion() { withCaptureDelay { self.runRegion { result in self.finishCapture(with: result) } } }
 
     func captureFullScreen() { withCaptureDelay { self.captureFullScreenNow() } }
 
@@ -218,7 +250,7 @@ final class AppState: ObservableObject {
             do {
                 try? await Task.sleep(for: .milliseconds(150))   // let our window vanish
                 let result = try await CaptureController.captureFullScreen(at: NSEvent.mouseLocation)
-                openEditor(with: result)
+                finishCapture(with: result)
             } catch {
                 restoreOwnWindows()
                 Toast.show(error.localizedDescription, symbol: "exclamationmark.triangle.fill")
@@ -243,7 +275,7 @@ final class AppState: ObservableObject {
                     }
                     let image = try await CaptureController.captureWindowImage(win)
                     let sel = CaptureSelection(rect: win.frame, displayID: 0, scale: NSScreen.main?.backingScaleFactor ?? 2)
-                    self.openEditor(with: CaptureResult(image: image, selection: sel))
+                    self.finishCapture(with: CaptureResult(image: image, selection: sel))
                 } catch {
                     self.restoreOwnWindows()
                     Toast.show(error.localizedDescription, symbol: "exclamationmark.triangle.fill")
@@ -263,7 +295,7 @@ final class AppState: ObservableObject {
             }
             let selection = CaptureSelection(rect: CGRect(x: 0, y: 0, width: image.width, height: image.height),
                                              displayID: 0, scale: 1)
-            self.openEditor(with: CaptureResult(image: image, selection: selection))
+            self.finishCapture(with: CaptureResult(image: image, selection: selection))
         }
     }
 
@@ -282,7 +314,7 @@ final class AppState: ObservableObject {
             }
             let selection = CaptureSelection(rect: CGRect(x: 0, y: 0, width: guide.width, height: guide.height),
                                              displayID: 0, scale: 1)
-            self.openEditor(with: CaptureResult(image: guide, selection: selection))
+            self.finishCapture(with: CaptureResult(image: guide, selection: selection))
             Toast.show("Step guide ready", symbol: "list.number")
         }
     }
@@ -439,7 +471,7 @@ final class AppState: ObservableObject {
                                           hasParticipants: self.lastHadParticipants,
                                           hasYou: self.lastHadYou,
                                           preLines: captionLines, recordID: saved.id)
-            } else {
+            } else if openPlayerAfterRecording {
                 VideoPreviewWindowController.present(url: fileURL, title: saved.title)
             }
         } else {
@@ -634,7 +666,7 @@ final class AppState: ObservableObject {
                 }
                 let selection = CaptureSelection(rect: CGRect(x: 0, y: 0, width: image.width, height: image.height),
                                                  displayID: CaptureController.screenNumber(screen), scale: 1)
-                self.openEditor(with: CaptureResult(image: image, selection: selection))
+                self.finishCapture(with: CaptureResult(image: image, selection: selection))
                 Toast.show("Scrolling capture saved", symbol: "arrow.down.doc.fill")
             }
         }
@@ -665,21 +697,25 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func openEditor(with result: CaptureResult) {
-        restoreOwnWindows()   // bring the dashboard back behind the editor
-        // Save the capture to the library immediately so it shows up right away; the
-        // editor overwrites this file with annotations when the user hits Done.
+    /// Every screenshot ends here: it's saved to the library at once, then handled per the
+    /// "After capture" setting (open the editor, copy to the clipboard, or just save).
+    private func finishCapture(with result: CaptureResult) {
+        restoreOwnWindows()
+        if captureSound { NSSound(named: "Tink")?.play() }
         let record = library.saveImage(result.image)
-        if let editor {
-            // Reuse the one editor window — replace its content (saving the old first).
-            editor.load(image: result.image, recordID: record?.id)
-        } else {
-            let controller = EditorWindowController(image: result.image, appState: self, recordID: record?.id)
-            controller.onClose = { [weak self] _ in self?.editor = nil }
-            editor = controller
-            controller.showWindow(nil)
+        switch afterCapture {
+        case .openEditor:
+            if alsoCopyCapture { Exporter.copyToPasteboard(result.image) }
+            // The editor overwrites the saved file with annotations when you press Done.
+            openEditor(image: result.image, recordID: record?.id)
+            NSApp.activate(ignoringOtherApps: true)
+        case .copyToClipboard:
+            Exporter.copyToPasteboard(result.image)
+            Toast.show("Copied to clipboard · saved to library", symbol: "doc.on.clipboard.fill")
+        case .saveOnly:
+            Toast.show(record == nil ? "Couldn't save capture" : "Saved to library",
+                       symbol: record == nil ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
         }
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     /// Reopen a saved library image in the annotation editor. Saving updates the same
@@ -691,17 +727,53 @@ final class AppState: ObservableObject {
             Toast.show("Couldn't open this capture", symbol: "exclamationmark.triangle.fill")
             return
         }
-        let project = library.loadProject(for: record)
+        openEditor(image: cgImage, recordID: record.id, project: library.loadProject(for: record))
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: Files from Finder (issue #1)
+
+    static let openableTypes: [UTType] = [.png, .jpeg, .heic, .tiff, .mpeg4Movie, .quickTimeMovie]
+
+    /// File › Open… — pick images or videos already on the Mac.
+    func openFilesFromPanel() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = Self.openableTypes
+        panel.allowsMultipleSelection = true
+        panel.message = "Choose an image to annotate or a video to play"
+        guard panel.runModal() == .OK else { return }
+        openExternal(panel.urls)
+    }
+
+    /// Open files handed to Snappilot (Open With, Dock drop, File › Open). Images open in the
+    /// editor — Done adds the result to the library and leaves the original untouched; videos
+    /// open in the player, where they can be trimmed and annotated.
+    func openExternal(_ urls: [URL]) {
+        for url in urls {
+            let type = UTType(filenameExtension: url.pathExtension)
+            if type?.conforms(to: .movie) == true {
+                VideoPreviewWindowController.present(url: url, title: url.deletingPathExtension().lastPathComponent)
+            } else if let image = NSImage(contentsOf: url),
+                      let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                openEditor(image: cgImage, recordID: nil, externalSource: url)
+            } else {
+                Toast.show("Couldn't open \(url.lastPathComponent)", symbol: "exclamationmark.triangle.fill")
+            }
+        }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func openEditor(image: CGImage, recordID: String?, externalSource: URL? = nil,
+                            project: EditorProject.Loaded? = nil) {
         if let editor {
-            editor.load(image: cgImage, recordID: record.id, project: project)
+            editor.load(image: image, recordID: recordID, project: project, externalSource: externalSource)
         } else {
-            let controller = EditorWindowController(image: cgImage, appState: self, recordID: record.id,
-                                                    project: project)
+            let controller = EditorWindowController(image: image, appState: self, recordID: recordID,
+                                                    project: project, externalSource: externalSource)
             controller.onClose = { [weak self] _ in self?.editor = nil }
             editor = controller
             controller.showWindow(nil)
         }
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func annotateLatestImage() {

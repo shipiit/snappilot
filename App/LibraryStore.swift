@@ -359,11 +359,13 @@ final class LibraryStore: ObservableObject {
     @discardableResult
     func saveImage(_ image: CGImage, ocrText: String = "", title: String = "", date: Date = Date()) -> CaptureRecord? {
         let suffix = String(UUID().uuidString.prefix(4)).lowercased()
-        let rel = CaptureLibrary.relativePath(for: date, suffix: suffix, ext: "png")
+        let format = Preference.value("pref.captureFormat", default: CaptureFormat.png)
+        let quality = Preference.value("pref.captureQuality", default: CaptureEncoder.defaultQuality)
+        let rel = CaptureLibrary.relativePath(for: date, suffix: suffix, ext: format.fileExtension)
         let fileURL = root.appendingPathComponent(rel)
         try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
                                                  withIntermediateDirectories: true)
-        guard writePNG(image, to: fileURL) else { return nil }
+        guard CaptureEncoder.write(image, format: format, quality: quality, to: fileURL) else { return nil }
 
         let stem = CaptureLibrary.stem(for: date, suffix: suffix)
         let record = CaptureRecord(id: stem, kind: .image, fileName: rel, createdAt: date,
@@ -450,7 +452,12 @@ final class LibraryStore: ObservableObject {
     /// moving it to the front of the library.
     func overwrite(id: String, image: CGImage) {
         guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
-        _ = writePNG(image, to: fileURL(for: records[idx]))
+        // Keep the capture in the format its file already uses.
+        let url = fileURL(for: records[idx])
+        let format = CaptureFormat(fileExtension: url.pathExtension) ?? .png
+        let quality = Preference.value("pref.captureQuality", default: CaptureEncoder.defaultQuality)
+        _ = CaptureEncoder.write(image, format: format, quality: quality, to: url)
+        ThumbnailCache.shared.invalidate(url)
         records[idx].width = image.width
         records[idx].height = image.height
         let rec = records.remove(at: idx)
@@ -552,12 +559,6 @@ final class LibraryStore: ObservableObject {
         return "Capture \(f.string(from: date))"
     }
 
-    private func writePNG(_ image: CGImage, to url: URL) -> Bool {
-        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)
-        else { return false }
-        CGImageDestinationAddImage(dest, image, nil)
-        return CGImageDestinationFinalize(dest)
-    }
 }
 
 extension JSONEncoder {

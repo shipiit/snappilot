@@ -18,12 +18,26 @@ targets:
     dependencies:
       - package: SnapCore
         product: SnapCore
+    info:
+      path: App/Info.plist
+      properties:
+        # "Open With" / drag onto the Dock icon for files already on the Mac (issue #1).
+        # Alternate rank: offered in Open With, never taking over the user's default app.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Image
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.png, public.jpeg, public.heic, public.tiff]
+          - CFBundleTypeName: Movie
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.mpeg-4, com.apple.quicktime-movie]
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: ai.snappilot.mac
-        MARKETING_VERSION: "0.1.9"
-        CURRENT_PROJECT_VERSION: "9"
+        MARKETING_VERSION: "0.2.0"
+        CURRENT_PROJECT_VERSION: "10"
         SWIFT_VERSION: "6.0"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: GHU37F9N5L

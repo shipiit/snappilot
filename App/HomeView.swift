@@ -28,16 +28,6 @@ enum HomeSection: String, CaseIterable, Identifiable {
     }
 }
 
-private enum LibrarySort: String, CaseIterable, Identifiable {
-    case newest = "Newest", oldest = "Oldest", name = "Name", largest = "Largest"
-    var id: String { rawValue }
-}
-
-private enum LibraryFilter: String, CaseIterable, Identifiable {
-    case all = "All", images = "Images", videos = "Videos", favorites = "Favorites"
-    var id: String { rawValue }
-}
-
 struct HomeView: View {
     @EnvironmentObject var app: AppState
     @ObservedObject private var hotkeys = HotkeyStore.shared
@@ -47,7 +37,6 @@ struct HomeView: View {
     @State private var section: HomeSection = .dashboard
     @State private var sidebarCollapsed = false
     @State private var query = ""
-    @State private var showRecOptions = false
     @State private var showPDFSheet = false
     @State private var pdfSelection: Set<String> = []
     @State private var showBatchSheet = false
@@ -55,8 +44,8 @@ struct HomeView: View {
     @State private var batchFormat: ExportFormat = .jpeg
     @State private var batchFramed = false
     @State private var openCollection: String?
-    @State private var librarySort: LibrarySort = .newest
-    @State private var libraryFilter: LibraryFilter = .all
+    @State private var librarySort: CaptureSort = .newest
+    @State private var libraryFilter: CaptureFilter = .all
 
     var body: some View {
         HStack(spacing: 0) {
@@ -126,10 +115,39 @@ struct HomeView: View {
             navButton("questionmark.circle", "Help & Guide") { WelcomeWindowController.present(app: app) }
 
             Spacer()
+            sidebarApps
             storageCard
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Theme.sidebarBG)
+    }
+
+    /// Compact links to the team's other apps.
+    private var sidebarApps: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("MORE APPS").font(.system(size: 10, weight: .bold)).foregroundStyle(.tertiary)
+                .padding(.horizontal, 24).padding(.bottom, 3)
+            sidebarAppLink("Mac Sweep", "sparkles", "#0EA5E9", "https://github.com/shipiit/mac-sweep/releases/latest")
+            sidebarAppLink("KeyVault", "key.fill", "#10B981", "https://github.com/shipiit/keyvault/releases/latest")
+        }
+        .padding(.bottom, 8)
+    }
+
+    private func sidebarAppLink(_ name: String, _ icon: String, _ tint: String, _ url: String) -> some View {
+        Button { if let link = URL(string: url) { NSWorkspace.shared.open(link) } } label: {
+            HStack(spacing: 10) {
+                Image(systemName: icon).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 22, height: 22).background(hexColor(tint), in: RoundedRectangle(cornerRadius: 6))
+                Text(name).font(.system(size: 13))
+                Spacer()
+                Image(systemName: "arrow.down.circle").font(.system(size: 12)).foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(Color.secondary)
+            .padding(.horizontal, 14).padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).padding(.horizontal, 10)
+        .help("Download \(name)")
     }
 
     private var storageCard: some View {
@@ -148,6 +166,9 @@ struct HomeView: View {
                 Label("Storage", systemImage: "internaldrive").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Text(fmt(u.total)).font(.system(size: 11, weight: .semibold))
+            }
+            if let free = freeDiskSpace {
+                Text("\(fmt(free)) free on this Mac").font(.system(size: 9)).foregroundStyle(.tertiary)
             }
             GeometryReader { geo in
                 HStack(spacing: 1) {
@@ -169,10 +190,20 @@ struct HomeView: View {
                     }
                 }
             }
+            Button { app.openLibraryFolder() } label: {
+                Text("Manage Storage").font(.system(size: 11, weight: .medium)).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered).controlSize(.small).padding(.top, 4)
+            .help("Open the library folder in Finder")
         }
         .padding(10)
         .background(Theme.cardBG, in: RoundedRectangle(cornerRadius: 10))
         .padding(.horizontal, 12).padding(.bottom, 12)
+    }
+
+    private var freeDiskSpace: Int64? {
+        let values = try? library.root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return values?.volumeAvailableCapacityForImportantUsage
     }
 
     private func navItem(_ s: HomeSection, badge: Int?) -> some View {
@@ -218,7 +249,11 @@ struct HomeView: View {
     @ViewBuilder private var content: some View {
         Group {
             switch section {
-            case .dashboard: dashboard
+            case .dashboard:
+                DashboardView(library: library, openSection: { s in withAnimation { section = s } },
+                              openSettings: { openSettings() }, export: { openBatchPicker() },
+                              exportPDF: { openPDFPicker() },
+                              newCollection: { newCollection() })
             case .library: gallerySection(title: "Library", records: filtered(library.records))
             case .favorites: gallerySection(title: "Favorites", records: filtered(library.favorites))
             case .collections: collectionsView
@@ -232,233 +267,8 @@ struct HomeView: View {
     }
 
     private func filtered(_ recs: [CaptureRecord]) -> [CaptureRecord] {
-        let scoped = recs.filter { record in
-            switch libraryFilter {
-            case .all: return true
-            case .images: return record.kind == .image
-            case .videos: return record.kind == .video
-            case .favorites: return record.favorite
-            }
-        }.filter { query.isEmpty || CaptureLibrary.matches($0, query: query) }
-        switch librarySort {
-        case .newest: return scoped.sorted { $0.createdAt > $1.createdAt }
-        case .oldest: return scoped.sorted { $0.createdAt < $1.createdAt }
-        case .name: return scoped.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        case .largest: return scoped.sorted { ($0.width * $0.height) > ($1.width * $1.height) }
-        }
-    }
-
-    private var dashboard: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                header(title: "Dashboard", subtitle: "Capture, annotate and organize your work with ease.")
-
-                studioSummary
-
-                HStack {
-                    sectionTitle("Quick Capture")
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Toggle("Delay", isOn: Binding(
-                            get: { app.captureDelay > 0 },
-                            set: { app.captureDelay = $0 ? 3 : 0 }
-                        )).toggleStyle(.switch).controlSize(.small)
-                            .help("Turn screenshot countdown on or off")
-                        if app.captureDelay > 0 {
-                            Picker("", selection: $app.captureDelay) {
-                                Text("3 seconds").tag(3); Text("5 seconds").tag(5)
-                            }.labelsHidden().fixedSize().help("Screenshot countdown length")
-                        } else {
-                            Text("Immediate").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                presetStrip
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 175, maximum: 240), spacing: 8)], spacing: 8) {
-                        captureCard("Region", "Capture a specific area of your screen", "crop", hotkeys.display(.captureRegion), [C("#3B82F6"), C("#2563EB")]) { app.captureRegion() }
-                        captureCard("Window", "Capture a specific application window", "macwindow", hotkeys.display(.captureWindow), [C("#22B8CF"), C("#0E8FA8")]) { app.captureWindow() }
-                        captureCard("Full Screen", "Capture your entire screen", "display", hotkeys.display(.captureFull), [C("#8B5CF6"), C("#6D28D9")]) { app.captureFullScreen() }
-                        captureCard("Grab Text (OCR)", "Extract text from any area", "text.viewfinder", hotkeys.display(.grabText), [C("#22C55E"), C("#16A34A")]) { app.grabText() }
-                        captureCard("Webcam Photo", "Capture a full-resolution camera still", "camera.fill", "NEW", [C("#14B8A6"), C("#0F766E")]) { app.captureWebcamPhoto() }
-                        captureCard("Step Recorder", "Capture every click into a numbered visual guide", "list.number", "Auto", [C("#F59E0B"), C("#D97706")]) { app.startStepRecorder() }
-                        captureCard("Scrolling Capture", "Capture a long page into one tall image", "arrow.down.doc", hotkeys.display(.scrollingCapture), [C("#0EA5E9"), C("#0284C7")]) { app.scrollingCapture() }
-                        captureCard("Record Region", "Record a specific area", "record.circle", hotkeys.display(.recordRegion), [C("#F97316"), C("#EF4444")]) { app.toggleRecordRegion() }
-                        captureCard("Record Screen", "Record your entire screen", "rectangle.badge.record", hotkeys.display(.recordScreen), [C("#EC4899"), C("#DB2777")]) { app.toggleRecordScreen() }
-                        captureCard("Record Meeting", "Record a call, then auto-transcribe & get tasks", "person.2.wave.2.fill", app.generatingNotes ? "Working…" : "Notes", [C("#6366F1"), C("#4F46E5")]) { app.recordMeeting() }
-                }
-
-                recordingBar
-
-                HStack {
-                    sectionTitle("Recent Captures")
-                    Spacer()
-                    searchField.frame(width: 280)
-                    Button { openPDFPicker() } label: { Label("PDF", systemImage: "doc.richtext") }
-                        .buttonStyle(.bordered).controlSize(.large).help("Pick images and export a PDF")
-                    Button { newCollection() } label: { Label("New Collection", systemImage: "folder.badge.plus") }
-                        .buttonStyle(.bordered).controlSize(.large).help("Group captures into a collection")
-                }
-                galleryGrid(records: Array(filtered(library.records).prefix(8)))
-            }
-            .padding(28)
-            .frame(maxWidth: 1600)
-            .frame(maxWidth: .infinity)
-        }
-    }
-
-    private var presetStrip: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text("Presets").font(.system(size: 13, weight: .semibold))
-                Text("One-click capture recipes").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button { addPreset() } label: { Label("New", systemImage: "plus") }
-                    .buttonStyle(.borderless).font(.caption)
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(app.capturePresets) { preset in
-                        Button { app.runPreset(preset) } label: {
-                            HStack(spacing: 7) {
-                                Image(systemName: preset.action.symbol).font(.system(size: 12, weight: .semibold))
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(preset.name).font(.system(size: 11, weight: .semibold))
-                                    Text(preset.action.title + (preset.delay > 0 ? " · \(preset.delay)s" : ""))
-                                        .font(.system(size: 9)).foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(.horizontal, 10).padding(.vertical, 8)
-                            .background(Theme.cardBG, in: RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.stroke, lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu { Button("Delete", role: .destructive) { deletePreset(preset) } }
-                    }
-                }
-            }
-        }
-    }
-
-    private func addPreset() {
-        let alert = NSAlert(); alert.messageText = "New capture preset"
-        let name = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24)); name.placeholderString = "Preset name"
-        alert.accessoryView = name; alert.addButton(withTitle: "Create"); alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        let value = name.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return }
-        app.capturePresets.append(CapturePreset(name: value, action: .region)); app.saveCapturePresets()
-    }
-
-    private func deletePreset(_ preset: CapturePreset) {
-        app.capturePresets.removeAll { $0.id == preset.id }; app.saveCapturePresets()
-    }
-
-    private var enabledSummary: [(String, String)] {
-        var out: [(String, String)] = []
-        if app.recordSystemAudio { out.append(("Audio", "speaker.wave.2.fill")) }
-        if app.recordMic { out.append(("Mic", "mic.fill")) }
-        if app.recordCamera { out.append(("Camera", "web.camera.fill")) }
-        if app.recordCursorHighlight { out.append(("Highlight", "cursorarrow.rays")) }
-        if app.recordCountdown { out.append(("Countdown", "timer")) }
-        return out
-    }
-
-    private var recordingBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "record.circle").foregroundStyle(.red).font(.system(size: 14))
-            Text("Recording").font(.system(size: 13, weight: .medium))
-            ForEach(enabledSummary, id: \.0) { title, icon in
-                HStack(spacing: 4) {
-                    Image(systemName: icon).font(.system(size: 10))
-                    Text(title).font(.system(size: 11, weight: .medium))
-                }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Theme.chipBG, in: Capsule())
-            }
-            if enabledSummary.isEmpty {
-                Text("screen only").font(.system(size: 11)).foregroundStyle(.tertiary)
-            }
-            Spacer()
-            Text(app.recordQuality.title).font(.system(size: 11)).foregroundStyle(.secondary)
-                .padding(.horizontal, 8).padding(.vertical, 3).background(Theme.chipBG, in: Capsule())
-            Button { showRecOptions.toggle() } label: {
-                Label("Customize", systemImage: "slider.horizontal.3")
-            }
-            .buttonStyle(.bordered)
-            .popover(isPresented: $showRecOptions, arrowEdge: .bottom) { optionsPopover }
-        }
-        .padding(.horizontal, 20).padding(.vertical, 12)
-        .background(Theme.panelBG, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.stroke, lineWidth: 1))
-    }
-
-    /// A quiet status strip keeps the dashboard useful at a glance without making
-    /// the user open Settings or navigate to the library first.
-    private var studioSummary: some View {
-        HStack(spacing: 12) {
-            summaryTile("Local library", "\(library.records.count) capture\(library.records.count == 1 ? "" : "s")", "lock.fill", C("#2563EB"))
-            summaryTile("Ready to share", "PNG · MP4 · PDF · GIF", "square.and.arrow.up", C("#7C3AED"))
-            summaryTile("Private by design", "OCR stays on this Mac", "checkmark.shield.fill", C("#059669"))
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func summaryTile(_ title: String, _ detail: String, _ icon: String, _ color: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(color)
-                .frame(width: 28, height: 28).background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 11, weight: .semibold))
-                Text(detail).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(Theme.cardBG, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke, lineWidth: 1))
-    }
-
-    private var optionsPopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Recording Options").font(.headline)
-            popoverToggle("System audio", "speaker.wave.2.fill", $app.recordSystemAudio)
-            popoverToggle("Microphone", "mic.fill", $app.recordMic)
-            if app.recordMic {
-                popoverToggle("Noise cancellation", "waveform.badge.mic", $app.recordNoiseCancellation)
-                    .padding(.leading, 18)
-            }
-            popoverToggle("Camera overlay", "web.camera.fill", $app.recordCamera)
-            popoverToggle("Show cursor", "cursorarrow", $app.recordCursor)
-            popoverToggle("Cursor highlight & clicks", "cursorarrow.rays", $app.recordCursorHighlight)
-            popoverToggle("Countdown before recording", "timer", $app.recordCountdown)
-            Divider()
-            HStack {
-                Image(systemName: "wand.and.stars").foregroundStyle(.secondary).frame(width: 20)
-                Text("Quality").font(.callout)
-                Spacer()
-                Picker("", selection: $app.recordQuality) {
-                    ForEach(RecordQuality.allCases, id: \.self) { Text($0.title).tag($0) }
-                }.labelsHidden().fixedSize()
-            }
-        }
-        .padding(16).frame(width: 290)
-    }
-
-    private func popoverToggle(_ title: String, _ icon: String, _ binding: Binding<Bool>) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon).foregroundStyle(binding.wrappedValue ? Color.accentColor : .secondary).frame(width: 20)
-            Text(title).font(.callout)
-            Spacer()
-            Toggle("", isOn: binding).labelsHidden().toggleStyle(.switch).controlSize(.small)
-        }
-    }
-
-    private func optionToggle(_ title: String, _ icon: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon).foregroundStyle(.secondary).font(.system(size: 13))
-            Text(title).font(.system(size: 13)).foregroundStyle(.primary)
-            Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch).controlSize(.small)
-        }
+        LibraryQuery.apply(recs, filter: libraryFilter, sort: librarySort, query: query,
+                           hasMeetingNotes: library.hasNotes)
     }
 
     // MARK: Reusable pieces
@@ -490,35 +300,6 @@ struct HomeView: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.stroke, lineWidth: 1))
     }
 
-    private func captureCard(_ title: String, _ desc: String, _ icon: String, _ shortcut: String,
-                             _ colors: [Color], _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 11) {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(.white.opacity(0.16)).frame(width: 32, height: 32)
-                    .overlay(Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white))
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-                        Spacer(minLength: 2)
-                        Text(shortcut).font(.system(size: 8.5, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.9))
-                            .padding(.horizontal, 5).padding(.vertical, 1).background(.white.opacity(0.14), in: Capsule())
-                    }
-                    Text(desc).font(.system(size: 8.5)).foregroundStyle(.white.opacity(0.78)).lineLimit(2)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-            .padding(.horizontal, 9).padding(.vertical, 6)
-            .background(
-                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: 12)
-            )
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.14), lineWidth: 1))
-            .shadow(color: (colors.last ?? Color.accentColor).opacity(0.12), radius: 6, y: 3)
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: Gallery
     private func gallerySection(title: String, records: [CaptureRecord]) -> some View {
         ScrollView {
@@ -535,11 +316,11 @@ struct HomeView: View {
         HStack(spacing: 10) {
             searchField.frame(maxWidth: 360)
             Picker("Filter", selection: $libraryFilter) {
-                ForEach(LibraryFilter.allCases) { Text($0.rawValue).tag($0) }
-            }.pickerStyle(.menu).frame(width: 120)
+                ForEach(CaptureFilter.allCases) { Text($0.title).tag($0) }
+            }.pickerStyle(.menu).frame(width: 140)
             Picker("Sort", selection: $librarySort) {
-                ForEach(LibrarySort.allCases) { Text($0.rawValue).tag($0) }
-            }.pickerStyle(.menu).frame(width: 120)
+                ForEach(CaptureSort.allCases) { Text($0.title).tag($0) }
+            }.pickerStyle(.menu).frame(width: 140)
             Button { openBatchPicker() } label: { Label("Batch Export", systemImage: "square.stack.3d.up") }
                 .buttonStyle(.bordered)
             Spacer()
@@ -555,7 +336,7 @@ struct HomeView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 220)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 240, maximum: 320), spacing: 18)], spacing: 18) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 400), spacing: 18)], spacing: 18) {
                     ForEach(records) { rec in GalleryCard(record: rec, library: library) }
                 }
             }
@@ -608,9 +389,8 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12).fill(Theme.panelBG).frame(height: 120)
-                    if let first = members.first, let img = NSImage(contentsOf: library.fileURL(for: first)) {
-                        Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
-                            .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 12))
+                    if let first = members.first {
+                        CollectionCover(url: library.fileURL(for: first), isVideo: first.kind != .image)
                     } else {
                         Image(systemName: "folder").font(.system(size: 34)).foregroundStyle(.tertiary)
                     }
@@ -804,14 +584,17 @@ struct HomeView: View {
         guard panel.runModal() == .OK, let folder = panel.url else { return }
         var saved = 0
         for record in pdfImages where batchSelection.contains(record.id) {
-            guard let image = NSImage(contentsOf: library.fileURL(for: record)),
-                  var rect = Optional(NSRect(origin: .zero, size: image.size)),
-                  let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { continue }
-            let output = batchFramed ? ImagePolish.frame(cg) : cg
-            guard let data = Exporter.data(output, format: batchFormat) else { continue }
-            let safeName = record.title.replacingOccurrences(of: "/", with: "-")
-            let destination = folder.appendingPathComponent("\(safeName)-\(record.id.suffix(4)).\(batchFormat.ext)")
-            if (try? data.write(to: destination, options: .atomic)) != nil { saved += 1 }
+            // Release each full-size image before decoding the next.
+            autoreleasepool {
+                guard let image = NSImage(contentsOf: library.fileURL(for: record)),
+                      var rect = Optional(NSRect(origin: .zero, size: image.size)),
+                      let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { return }
+                let output = batchFramed ? ImagePolish.frame(cg) : cg
+                guard let data = Exporter.data(output, format: batchFormat) else { return }
+                let safeName = record.title.replacingOccurrences(of: "/", with: "-")
+                let destination = folder.appendingPathComponent("\(safeName)-\(record.id.suffix(4)).\(batchFormat.ext)")
+                if (try? data.write(to: destination, options: .atomic)) != nil { saved += 1 }
+            }
         }
         showBatchSheet = false
         Toast.show("Exported \(saved) image\(saved == 1 ? "" : "s")", symbol: "checkmark.circle.fill")
@@ -846,7 +629,8 @@ private struct PDFPickCell: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { toggle() }
-        .task { thumb = NSImage(contentsOf: library.fileURL(for: record)) }
+        .task { thumb = await ThumbnailCache.shared.thumbnail(for: library.fileURL(for: record)) }
+        .onDisappear { thumb = nil }
     }
 }
 
@@ -865,7 +649,7 @@ private struct PDFPickCell: View {
 }
 
 /// A capture thumbnail card with favorite star, format badge, and a ⋯ menu.
-private struct GalleryCard: View {
+struct GalleryCard: View {
     let record: CaptureRecord
     @ObservedObject var library: LibraryStore
     @EnvironmentObject var app: AppState
@@ -886,6 +670,12 @@ private struct GalleryCard: View {
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    // Double-click opens the editor (images) or player (videos); the Annotate
+                    // button and ⋯ › Open do the same for keyboard and VoiceOver users.
+                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                    .onTapGesture(count: 2) { open() }
+                    .accessibilityAction(named: record.kind == .video ? "Play" : "Annotate") { open() }
+                    .help(record.kind == .video ? "Double-click to play" : "Double-click to annotate")
 
                 if record.kind == .video {
                     Image(systemName: "play.circle.fill").font(.system(size: 34))
@@ -939,6 +729,9 @@ private struct GalleryCard: View {
                 iconButton("trash", "Move to Trash") { library.moveToTrash(record) }
                 Menu {
                     Button("Open") { open() }
+                    if record.kind == .image {
+                        Button("Open in Preview") { NSWorkspace.shared.open(library.fileURL(for: record)) }
+                    }
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([library.fileURL(for: record)]) }
                     Button("Share…", systemImage: "square.and.arrow.up") { SystemShare.file(library.fileURL(for: record)) }
                     if record.kind == .image {
@@ -985,14 +778,11 @@ private struct GalleryCard: View {
             }
         }
         .onDrag { NSItemProvider(object: record.id as NSString) }
-        .task {
-            let url = library.fileURL(for: record)
-            if record.kind == .image {
-                thumb = NSImage(contentsOf: url)
-            } else if let cg = await VideoAnnotator.grabFrame(from: url) {
-                thumb = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-            }
+        .task(id: record.fileName) {
+            thumb = await ThumbnailCache.shared.thumbnail(for: library.fileURL(for: record),
+                                                          isVideo: record.kind != .image)
         }
+        .onDisappear { thumb = nil }   // let the capped cache own off-screen previews
     }
 
     private func iconButton(_ icon: String, _ help: String, _ action: @escaping () -> Void) -> some View {
@@ -1004,12 +794,12 @@ private struct GalleryCard: View {
         .buttonStyle(.plain).help(help)
     }
 
+    /// Images open in Snappilot's editor (issue #1); videos in the player.
     private func open() {
-        let url = library.fileURL(for: record)
         if record.kind == .video {
-            VideoPreviewWindowController.present(url: url, title: record.title)
+            VideoPreviewWindowController.present(url: library.fileURL(for: record), title: record.title)
         } else {
-            NSWorkspace.shared.open(url)
+            app.annotateAgain(record)
         }
     }
 
@@ -1022,7 +812,28 @@ private struct GalleryCard: View {
 
     private func badge(_ t: String) -> some View {
         Text(t).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+            .lineLimit(1).fixedSize()
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(Theme.chipBG, in: RoundedRectangle(cornerRadius: 5))
+    }
+}
+
+/// A collection's cover tile, loaded as a cached thumbnail instead of decoding in `body`.
+private struct CollectionCover: View {
+    let url: URL
+    let isVideo: Bool
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                    .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                Image(systemName: "photo").font(.system(size: 28)).foregroundStyle(.tertiary)
+            }
+        }
+        .task(id: url) { image = await ThumbnailCache.shared.thumbnail(for: url, isVideo: isVideo) }
+        .onDisappear { image = nil }
     }
 }

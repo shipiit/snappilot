@@ -9,6 +9,9 @@ func dynColor(_ light: String, _ dark: String) -> Color {
     })
 }
 
+/// A fixed (non-adaptive) color from a hex string, for brand gradients.
+func hexColor(_ hex: String) -> Color { Color(nsColor: nsColor(fromHex: hex)) }
+
 /// Adaptive app chrome colors — clean light theme, rich dark theme.
 enum Theme {
     static let appBG        = dynColor("#F4F5F7", "#0E1116")

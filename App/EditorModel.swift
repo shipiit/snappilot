@@ -17,6 +17,9 @@ final class EditorModel: ObservableObject {
     weak var appState: AppState?
     /// The library record this capture belongs to (saved instantly on capture).
     var libraryRecordID: String?
+    /// A file opened from Finder / File › Open (not a library capture). Done adds the result
+    /// to the library; the original file only changes via "Save to Original File".
+    var externalSourceURL: URL?
 
     @Published var doc = AnnotationDocument()
     @Published var tool: Tool = .arrow
@@ -29,6 +32,9 @@ final class EditorModel: ObservableObject {
     @Published var startHead: ArrowHead = .none { didSet { restyleSelection() } }
     @Published var endHead: ArrowHead = .arrow { didSet { restyleSelection() } }
     @Published var arrowSize: ArrowSize = .medium { didSet { restyleSelection() } }
+    @Published var redactStyle: RedactStyle = Preference.value("pref.redactStyle", default: RedactStyle.pixelate) {
+        didSet { Preference.set(redactStyle, for: "pref.redactStyle"); restyleSelection() }
+    }
     @Published var stamp = "⭐️"
     @Published var selectedID: Int? { didSet { if selectedID != oldValue { syncStyleFromSelection() } } }
     @Published var editingTextID: Int?
@@ -40,6 +46,13 @@ final class EditorModel: ObservableObject {
     private struct Snapshot { var doc: AnnotationDocument; var base: CGImage; var imageLayers: [ImageLayer] }
     private var undoStack: [Snapshot] = []
     private var redoStack: [Snapshot] = []
+    /// The editor window's undo manager. Mirrors `undoStack` so Edit › Undo / Redo enable
+    /// correctly and ⌘Z goes through the standard menu.
+    let undoManager: UndoManager = {
+        let manager = UndoManager()
+        manager.levelsOfUndo = 50
+        return manager
+    }()
     /// Edits made since the image was last written to the library.
     private(set) var hasUnsavedChanges = false
     /// True while the panel is being loaded from a selection, so it doesn't restyle it back.
@@ -56,9 +69,14 @@ final class EditorModel: ObservableObject {
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
 
+    /// Each step can hold a full-size image (after crop/resize/background edits), so history is capped.
+    private static let undoLimit = 50
+
     private func snapshot() {
         undoStack.append(Snapshot(doc: doc, base: base, imageLayers: imageLayers))
+        if undoStack.count > Self.undoLimit { undoStack.removeFirst(undoStack.count - Self.undoLimit) }
         redoStack.removeAll()
+        undoManager.registerUndo(withTarget: self) { target in MainActor.assumeIsolated { target.undoFromManager() } }
         hasUnsavedChanges = true
         restyledSelectionID = nil
     }
@@ -67,7 +85,7 @@ final class EditorModel: ObservableObject {
     var currentStyle: AnnotationStyle {
         AnnotationStyle(colorHex: colorHex, thickness: thickness, filled: filled, opacity: opacity,
                         stepStyle: stepStyle, lineStyle: lineStyle, startHead: startHead,
-                        endHead: endHead, arrowSize: arrowSize)
+                        endHead: endHead, arrowSize: arrowSize, redactStyle: redactStyle)
     }
 
     /// Selecting an annotation loads its style into the panel.
@@ -79,6 +97,7 @@ final class EditorModel: ObservableObject {
         colorHex = a.colorHex; thickness = a.thickness; filled = a.filled; opacity = a.opacity
         stepStyle = a.stepStyle; lineStyle = a.lineStyle
         startHead = a.startHead; endHead = a.endHead; arrowSize = a.arrowSize
+        if let style = a.redactStyle { redactStyle = style }
     }
 
     /// Panel edits apply to the selected annotation, Snagit-style.
@@ -99,7 +118,8 @@ final class EditorModel: ObservableObject {
         let a = doc.add(tool, start: start, end: end, text: text, colorHex: colorHex,
                         thickness: thickness, filled: filled, opacity: opacity,
                         stepStyle: stepStyle, lineStyle: lineStyle,
-                        startHead: startHead, endHead: endHead, arrowSize: arrowSize)
+                        startHead: startHead, endHead: endHead, arrowSize: arrowSize,
+                        redactStyle: redactStyle)
         if tool == .text || tool == .callout { editingTextID = a.id; selectedID = a.id }
         return a.id
     }
@@ -466,7 +486,20 @@ final class EditorModel: ObservableObject {
         }
     }
 
-    func undo() {
+    /// Undo / redo from buttons and menus go through the undo manager so it stays in step.
+    func undo() { if undoManager.canUndo { undoManager.undo() } else { applyUndo() } }
+    func redo() { if undoManager.canRedo { undoManager.redo() } else { applyRedo() } }
+
+    private func undoFromManager() {
+        applyUndo()
+        undoManager.registerUndo(withTarget: self) { target in MainActor.assumeIsolated { target.redoFromManager() } }
+    }
+    private func redoFromManager() {
+        applyRedo()
+        undoManager.registerUndo(withTarget: self) { target in MainActor.assumeIsolated { target.undoFromManager() } }
+    }
+
+    private func applyUndo() {
         guard let prev = undoStack.popLast() else { return }
         redoStack.append(Snapshot(doc: doc, base: base, imageLayers: imageLayers))
         doc = prev.doc; base = prev.base; imageLayers = prev.imageLayers
@@ -474,7 +507,7 @@ final class EditorModel: ObservableObject {
         selectedID = nil; selectedLayerID = nil; editingTextID = nil
         hasUnsavedChanges = true
     }
-    func redo() {
+    private func applyRedo() {
         guard let next = redoStack.popLast() else { return }
         undoStack.append(Snapshot(doc: doc, base: base, imageLayers: imageLayers))
         doc = next.doc; base = next.base; imageLayers = next.imageLayers
@@ -581,7 +614,7 @@ final class EditorModel: ObservableObject {
         nextLayerID = (imageLayers.map(\.id).max() ?? 0) + 1
         framed = loaded.project.framed
         cornerRadius = loaded.project.cornerRadius ?? 0
-        undoStack.removeAll(); redoStack.removeAll()
+        undoStack.removeAll(); redoStack.removeAll(); undoManager.removeAllActions()
         selectedID = nil; selectedLayerID = nil; editingTextID = nil
         hasUnsavedChanges = false
     }
@@ -595,7 +628,7 @@ final class EditorModel: ObservableObject {
         libraryRecordID = recordID
         doc = AnnotationDocument()
         imageLayers.removeAll(); selectedLayerID = nil; nextLayerID = 1
-        undoStack.removeAll(); redoStack.removeAll()
+        undoStack.removeAll(); redoStack.removeAll(); undoManager.removeAllActions()
         selectedID = nil; editingTextID = nil
         framed = false
         cornerRadius = 0
@@ -619,7 +652,8 @@ final class EditorModel: ObservableObject {
             snapshot()
             for b in sensitive {
                 let r = b.rect.insetBy(dx: -4, dy: -4)
-                doc.add(.blur, start: CGPoint(x: r.minX, y: r.minY), end: CGPoint(x: r.maxX, y: r.maxY))
+                doc.add(.blur, start: CGPoint(x: r.minX, y: r.minY), end: CGPoint(x: r.maxX, y: r.maxY),
+                        redactStyle: redactStyle)
             }
             Toast.show("Redacted \(sensitive.count) item\(sensitive.count == 1 ? "" : "s")", symbol: "eye.slash.fill")
         }

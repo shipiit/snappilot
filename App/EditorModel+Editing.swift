@@ -117,4 +117,30 @@ extension EditorModel {
         addImageLayer(image, centeredAt: CGPoint(x: rect.midX, y: rect.midY), clampToCanvas: false)
         expandCanvasToFit(recordUndo: false)   // one undo step for the whole combine
     }
+
+    // MARK: Saving choices (issue #1)
+
+    /// Keep the original capture untouched and add this edit to the library as a new one.
+    func saveAsNewCapture() {
+        libraryRecordID = nil
+        persistToLibrary()
+        Toast.show("Saved as a new capture", symbol: "plus.square.on.square")
+    }
+
+    /// Whether "Save to Original File" can write back in the file's own format.
+    var canSaveToOriginal: Bool {
+        externalSourceURL.flatMap { CaptureFormat(fileExtension: $0.pathExtension) } != nil
+    }
+
+    /// Overwrite the file this image was opened from, in its own format.
+    func saveToOriginalFile() {
+        guard let url = externalSourceURL, let format = CaptureFormat(fileExtension: url.pathExtension) else { return }
+        let quality = appState?.captureQuality ?? CaptureEncoder.defaultQuality
+        if CaptureEncoder.write(exportImage(), format: format, quality: quality, to: url) {
+            discardChanges()
+            Toast.show("Saved to \(url.lastPathComponent)", symbol: "checkmark.circle.fill")
+        } else {
+            Toast.show("Couldn't save \(url.lastPathComponent)", symbol: "exclamationmark.triangle.fill")
+        }
+    }
 }
