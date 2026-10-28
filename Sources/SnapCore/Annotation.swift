@@ -85,12 +85,15 @@ public struct Annotation: Identifiable, Equatable, Sendable, Codable {
     public var arrowSize: ArrowSize
     /// Freehand path for `.pen` strokes (start/end hold its bounding corners).
     public var points: [CGPoint]
+    /// How a `.blur` region hides content; nil (older projects) means pixelate.
+    public var redactStyle: RedactStyle?
 
     public init(id: Int, tool: Tool, start: CGPoint, end: CGPoint, text: String = "",
                 colorHex: String = "#FF3B30", thickness: Double = 3, stepNumber: Int? = nil,
                 filled: Bool = false, opacity: Double = 1, stepStyle: StepStyle = .number,
                 lineStyle: LineStyle = .solid, startHead: ArrowHead = .none,
-                endHead: ArrowHead = .arrow, arrowSize: ArrowSize = .medium, points: [CGPoint] = []) {
+                endHead: ArrowHead = .arrow, arrowSize: ArrowSize = .medium, points: [CGPoint] = [],
+                redactStyle: RedactStyle? = nil) {
         self.id = id
         self.tool = tool
         self.start = start
@@ -107,6 +110,7 @@ public struct Annotation: Identifiable, Equatable, Sendable, Codable {
         self.endHead = endHead
         self.arrowSize = arrowSize
         self.points = points
+        self.redactStyle = redactStyle
     }
 
     /// Move the whole annotation, including any freehand points.
@@ -139,14 +143,16 @@ public struct AnnotationDocument: Sendable, Codable {
                              thickness: Double = 3, filled: Bool = false,
                              opacity: Double = 1, stepStyle: StepStyle = .number,
                              lineStyle: LineStyle = .solid, startHead: ArrowHead = .none,
-                             endHead: ArrowHead = .arrow, arrowSize: ArrowSize = .medium) -> Annotation {
+                             endHead: ArrowHead = .arrow, arrowSize: ArrowSize = .medium,
+                             redactStyle: RedactStyle? = nil) -> Annotation {
         let step = (tool == .step) ? nextStep : nil
         if tool == .step { nextStep += 1 }
         let a = Annotation(id: nextID, tool: tool, start: start, end: end,
                            text: text, colorHex: colorHex, thickness: thickness,
                            stepNumber: step, filled: filled, opacity: opacity,
                            stepStyle: stepStyle, lineStyle: lineStyle,
-                           startHead: startHead, endHead: endHead, arrowSize: arrowSize)
+                           startHead: startHead, endHead: endHead, arrowSize: arrowSize,
+                           redactStyle: tool == .blur ? (redactStyle ?? .pixelate) : nil)
         nextID += 1
         items.append(a)
         return a
@@ -202,7 +208,8 @@ public struct AnnotationDocument: Sendable, Codable {
                           stepNumber: copy.tool == .step ? nextStep : copy.stepNumber,
                           filled: copy.filled, opacity: copy.opacity, stepStyle: copy.stepStyle,
                           lineStyle: copy.lineStyle, startHead: copy.startHead,
-                          endHead: copy.endHead, arrowSize: copy.arrowSize, points: copy.points)
+                          endHead: copy.endHead, arrowSize: copy.arrowSize, points: copy.points,
+                          redactStyle: copy.redactStyle)
         copy.translate(dx: offset.x, dy: offset.y)
         nextID += 1
         if copy.tool == .step { nextStep += 1 }
@@ -255,19 +262,21 @@ public struct AnnotationStyle: Equatable, Sendable, Codable {
     public var startHead: ArrowHead
     public var endHead: ArrowHead
     public var arrowSize: ArrowSize
+    /// Optional so styles saved before redaction styles existed still decode.
+    public var redactStyle: RedactStyle?
 
     public init(colorHex: String = "#FF3B30", thickness: Double = 3, filled: Bool = false, opacity: Double = 1,
                 stepStyle: StepStyle = .number, lineStyle: LineStyle = .solid, startHead: ArrowHead = .none,
-                endHead: ArrowHead = .arrow, arrowSize: ArrowSize = .medium) {
+                endHead: ArrowHead = .arrow, arrowSize: ArrowSize = .medium, redactStyle: RedactStyle? = nil) {
         self.colorHex = colorHex; self.thickness = thickness; self.filled = filled; self.opacity = opacity
         self.stepStyle = stepStyle; self.lineStyle = lineStyle; self.startHead = startHead
-        self.endHead = endHead; self.arrowSize = arrowSize
+        self.endHead = endHead; self.arrowSize = arrowSize; self.redactStyle = redactStyle
     }
 
     public init(of a: Annotation) {
         self.init(colorHex: a.colorHex, thickness: a.thickness, filled: a.filled, opacity: a.opacity,
                   stepStyle: a.stepStyle, lineStyle: a.lineStyle, startHead: a.startHead,
-                  endHead: a.endHead, arrowSize: a.arrowSize)
+                  endHead: a.endHead, arrowSize: a.arrowSize, redactStyle: a.redactStyle)
     }
 
     /// `a` with this style; geometry, text and step number are kept. Opacity is clamped to 0.05…1
@@ -277,6 +286,7 @@ public struct AnnotationStyle: Equatable, Sendable, Codable {
         out.colorHex = colorHex; out.thickness = max(0.5, thickness); out.filled = filled
         out.opacity = min(1, max(0.05, opacity)); out.stepStyle = stepStyle; out.lineStyle = lineStyle
         out.startHead = startHead; out.endHead = endHead; out.arrowSize = arrowSize
+        if a.tool == .blur, let redactStyle { out.redactStyle = redactStyle }
         return out
     }
 }

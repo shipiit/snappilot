@@ -99,7 +99,8 @@ enum AnnotationRenderer {
         case .blur:
             // Pixelate the region of the frame. For video this becomes a static blurred
             // patch baked over the clip — good for hiding a fixed name/logo/field.
-            drawBlur(rectTL: selectionRect(from: a.start, to: a.end), imageHeight: h, base: base, ctx: ctx)
+            drawBlur(rectTL: selectionRect(from: a.start, to: a.end), style: a.redactStyle ?? .pixelate,
+                     imageHeight: h, base: base, ctx: ctx)
         case .spotlight:
             drawSpotlight(rectTL: selectionRect(from: a.start, to: a.end), imageHeight: h,
                           base: base, ctx: ctx, opacity: a.opacity)
@@ -187,19 +188,11 @@ enum AnnotationRenderer {
         s.draw(at: NSPoint(x: center.x - sz.width / 2, y: center.y - sz.height / 2), withAttributes: attrs)
     }
 
-    private static func drawBlur(rectTL: CGRect, imageHeight h: Int, base: CGImage, ctx: CGContext) {
-        let bl = NSRect(x: rectTL.minX, y: CGFloat(h) - rectTL.maxY, width: rectTL.width, height: rectTL.height)
-        guard let region = ImageOps.crop(base, to: CGRect(x: rectTL.minX, y: rectTL.minY,
-                                                          width: rectTL.width, height: rectTL.height)) else { return }
-        let ci = CIImage(cgImage: region)
-        let block = CGFloat(ImageOps.clampBlock(Int(min(rectTL.width, rectTL.height) / 12)))
-        guard let filter = CIFilter(name: "CIPixellate") else { return }
-        filter.setValue(ci, forKey: kCIInputImageKey)
-        filter.setValue(CIVector(x: 0, y: 0), forKey: kCIInputCenterKey)
-        filter.setValue(block, forKey: kCIInputScaleKey)
-        guard let out = filter.outputImage?.cropped(to: ci.extent),
-              let cg = ciContext.createCGImage(out, from: ci.extent) else { return }
-        ctx.draw(cg, in: bl)
+    private static func drawBlur(rectTL: CGRect, style: RedactStyle, imageHeight h: Int, base: CGImage, ctx: CGContext) {
+        let clipped = rectTL.intersection(CGRect(x: 0, y: 0, width: base.width, height: base.height)).integral
+        guard let redacted = RedactRenderer.render(base, rect: clipped, style: style) else { return }
+        ctx.draw(redacted, in: CGRect(x: clipped.minX, y: CGFloat(h) - clipped.maxY,
+                                      width: clipped.width, height: clipped.height))
     }
 
     private static func drawSpotlight(rectTL: CGRect, imageHeight h: Int, base: CGImage,

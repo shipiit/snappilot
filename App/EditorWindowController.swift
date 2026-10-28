@@ -22,9 +22,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     init(image: CGImage, appState: AppState, recordID: String? = nil,
-         project: EditorProject.Loaded? = nil, videoApply: ((CGImage) -> Void)? = nil) {
+         project: EditorProject.Loaded? = nil, externalSource: URL? = nil,
+         videoApply: ((CGImage) -> Void)? = nil) {
         self.model = EditorModel(base: image, appState: appState)
         self.model.libraryRecordID = recordID
+        self.model.externalSourceURL = externalSource
         self.model.onApplyToVideo = videoApply
         if let project { self.model.restore(project) }
 
@@ -36,7 +38,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: contentSize),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable],
                               backing: .buffered, defer: false)
-        window.title = videoApply == nil ? "Snappilot — Edit" : "Snappilot — Annotate Video"
+        window.title = videoApply != nil ? "Snappilot — Annotate Video"
+            : externalSource.map { "Snappilot — \($0.lastPathComponent)" } ?? "Snappilot — Edit"
         window.isReleasedWhenClosed = false
         window.center()
 
@@ -50,15 +53,19 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     required init?(coder: NSCoder) { fatalError() }
 
     /// Reuse this window for a new capture: save the current one first, then swap in the new image.
-    func load(image: CGImage, recordID: String?, project: EditorProject.Loaded? = nil) {
+    func load(image: CGImage, recordID: String?, project: EditorProject.Loaded? = nil, externalSource: URL? = nil) {
         if model.hasUnsavedChanges { model.persistToLibrary() }
         model.reset(base: image, recordID: recordID)
+        model.externalSourceURL = externalSource
         if let project { model.restore(project) }
         window?.makeKeyAndOrderFront(nil)
     }
 
     func undo() { model.undo() }
     func redo() { model.redo() }
+
+    /// The editor's own undo history drives Edit › Undo / Redo for this window.
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? { model.undoManager }
 
     /// Closing with unsaved annotations asks first, like any Mac document.
     func windowShouldClose(_ sender: NSWindow) -> Bool {

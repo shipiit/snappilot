@@ -28,6 +28,8 @@ struct SnappilotApp: App {
     /// that would fire captures twice — but the user can still see every shortcut here).
     @CommandsBuilder private var menuCommands: some Commands {
         CommandGroup(replacing: .newItem) {
+            Button("Open…") { app.openFilesFromPanel() }.keyboardShortcut("o")
+            Divider()
             Button(item("Capture Region", .captureRegion)) { app.captureRegion() }
             Button(item("Capture Window", .captureWindow)) { app.captureWindow() }
             Button(item("Capture Full Screen", .captureFull)) { app.captureFullScreen() }
@@ -111,6 +113,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func mainWindow() -> NSWindow? {
         NSApp.windows.first { $0.title == "Snappilot" || ($0.identifier?.rawValue.contains("main") ?? false) }
+    }
+
+    /// Files from Finder's Open With or dropped on the Dock icon.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        AppState.shared.openExternal(urls)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

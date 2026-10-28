@@ -668,5 +668,165 @@ do {
     check(false, "thumbnail fixtures threw: \(error)")
 }
 
+// MARK: Capture formats
+check(CaptureFormat(fileExtension: "JPG") == .jpeg && CaptureFormat(fileExtension: "jpeg") == .jpeg, "jpg and jpeg map to JPEG")
+check(CaptureFormat(fileExtension: "png") == .png && CaptureFormat(fileExtension: "heic") == .heic, "png and heic are recognised")
+check(CaptureFormat(fileExtension: "gif") == nil && CaptureFormat(fileExtension: "") == nil, "unsupported extensions are rejected")
+check(CaptureFormat.jpeg.fileExtension == "jpg" && CaptureFormat.heic.fileExtension == "heic", "file extensions are conventional")
+check(!CaptureFormat.jpeg.supportsTransparency && CaptureFormat.png.supportsTransparency, "only JPEG lacks transparency")
+
+func decodeFormat(_ data: Data) -> String? {
+    CGImageSourceCreateWithData(data as CFData, nil).flatMap { CGImageSourceGetType($0) as String? }
+}
+func decodePixel(_ data: Data, x: Int, y: Int) -> [UInt8]? {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+    var pixel = [UInt8](repeating: 0, count: 4)
+    guard let ctx = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return nil }
+    ctx.draw(image, in: CGRect(x: -x, y: -(image.height - 1 - y), width: image.width, height: image.height))
+    return pixel
+}
+if let solid = renderSolid(width: 64, height: 48) {
+    let png = CaptureEncoder.data(solid, format: .png)
+    let jpeg = CaptureEncoder.data(solid, format: .jpeg)
+    let heic = CaptureEncoder.data(solid, format: .heic)
+    check(png.flatMap(decodeFormat) == "public.png", "PNG encodes as PNG")
+    check(jpeg.flatMap(decodeFormat) == "public.jpeg", "JPEG encodes as JPEG")
+    if let heic { check(decodeFormat(heic) == "public.heic", "HEIC encodes as HEIC") }
+    else { print("skip - HEIC encoder unavailable on this machine") }
+    if let jpeg, let p = decodePixel(jpeg, x: 30, y: 20), let ref = png.flatMap({ decodePixel($0, x: 30, y: 20) }) {
+        let drift = zip(p.prefix(3), ref.prefix(3)).map { abs(Int($0) - Int($1)) }.max() ?? 255
+        check(drift <= 6, "JPEG keeps colours within compression error of PNG (jpeg \(p) vs png \(ref))")
+    }
+
+    if let low = CaptureEncoder.data(solid, format: .jpeg, quality: 0.1), let high = CaptureEncoder.data(solid, format: .jpeg, quality: 1) {
+        check(low.count <= high.count, "lower JPEG quality never makes a bigger file (\(low.count) vs \(high.count) bytes)")
+    }
+    check(CaptureEncoder.data(solid, format: .jpeg, quality: -5) != nil && CaptureEncoder.data(solid, format: .jpeg, quality: 9) != nil,
+          "out-of-range quality is clamped, not rejected")
+}
+if let square = renderSolid(width: 40, height: 40), let rounded = ImageOps.roundedCorners(square, radius: 12) {
+    if let jpeg = CaptureEncoder.data(rounded, format: .jpeg), let corner = decodePixel(jpeg, x: 0, y: 0) {
+        check(corner[0] > 240 && corner[1] > 240 && corner[2] > 240, "transparent corners become white in JPEG, not black (got \(corner))")
+    } else { check(false, "rounded image encodes as JPEG") }
+    if let png = CaptureEncoder.data(rounded, format: .png), let corner = decodePixel(png, x: 0, y: 0) {
+        check(corner[3] == 0, "PNG keeps transparent corners")
+    }
+}
+do {
+    let formatDir = FileManager.default.temporaryDirectory.appendingPathComponent("snapverify-format-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: formatDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: formatDir) }
+    if let solid = renderSolid(width: 20, height: 20) {
+        let target = formatDir.appendingPathComponent("shot.jpg")
+        check(CaptureEncoder.write(solid, format: .jpeg, to: target), "write reports success")
+        check((try? Data(contentsOf: target)).flatMap(decodeFormat) == "public.jpeg", "written file is a real JPEG")
+        check(!CaptureEncoder.write(solid, format: .png, to: formatDir.appendingPathComponent("missing/dir/x.png")),
+              "write into a missing folder reports failure")
+    }
+}
+
+// MARK: Library query (dashboard filters)
+let day: TimeInterval = 86_400
+let qBase = Date(timeIntervalSince1970: 1_700_000_000)
+let qImage = CaptureRecord(id: "a", kind: .image, fileName: "a.png", createdAt: qBase, width: 100, height: 100, ocrText: "Invoice 42", title: "beta")
+let qShot = CaptureRecord(id: "b", kind: .image, fileName: "b.jpg", createdAt: qBase + day, width: 300, height: 200, ocrText: "  \n", title: "Alpha", isFavorite: true)
+let qVideo = CaptureRecord(id: "c", kind: .video, fileName: "c.mp4", createdAt: qBase + 2 * day, width: 50, height: 50, title: "clip 10")
+let qMeeting = CaptureRecord(id: "d", kind: .video, fileName: "d.mp4", createdAt: qBase + 3 * day, width: 60, height: 60, ocrText: "standup notes", title: "clip 9")
+let qAll = [qImage, qShot, qVideo, qMeeting]
+let hasNotesForQuery: (CaptureRecord) -> Bool = { $0.id == "d" }
+@MainActor func ids(_ f: CaptureFilter, _ s: CaptureSort = .newest, _ q: String = "") -> [String] {
+    LibraryQuery.apply(qAll, filter: f, sort: s, query: q, hasMeetingNotes: hasNotesForQuery).map(\.id)
+}
+check(ids(.all) == ["d", "c", "b", "a"], "All shows everything, newest first")
+check(ids(.images) == ["b", "a"], "Images shows only images")
+check(ids(.videos) == ["d", "c"], "Videos shows only videos")
+check(ids(.text) == ["d", "a"], "Text (OCR) shows captures with recognised text, ignoring whitespace-only text")
+check(ids(.meetings) == ["d"], "Meetings shows only recordings with notes")
+check(ids(.favorites) == ["b"], "Favorites shows starred captures")
+check(ids(.all, .oldest) == ["a", "b", "c", "d"], "oldest first")
+check(ids(.all, .name) == ["b", "a", "d", "c"], "name sort is case-insensitive and numeric-aware (clip 9 before clip 10)")
+check(ids(.all, .largest).first == "b", "largest sorts by pixel area")
+check(ids(.all, .newest, "invoice") == ["a"], "search matches OCR text")
+check(ids(.images, .newest, "standup").isEmpty, "search and filter combine")
+check(LibraryQuery.apply([], filter: .all, sort: .newest, query: "", hasMeetingNotes: hasNotesForQuery).isEmpty, "empty library stays empty")
+check(LibraryQuery.greeting(hour: 5) == "Good morning" && LibraryQuery.greeting(hour: 11) == "Good morning", "morning is 5–11")
+check(LibraryQuery.greeting(hour: 12) == "Good afternoon" && LibraryQuery.greeting(hour: 16) == "Good afternoon", "afternoon is 12–16")
+check(LibraryQuery.greeting(hour: 17) == "Good evening" && LibraryQuery.greeting(hour: 2) == "Good evening", "evening covers late night")
+check(LibraryQuery.firstName("Rahul Raj") == "Rahul" && LibraryQuery.firstName("  Ana ") == "Ana", "first name from full name")
+check(LibraryQuery.firstName("") == nil && LibraryQuery.firstName("   ") == nil, "blank name gives nil")
+
+// MARK: Capture settings
+if let store = UserDefaults(suiteName: "snapverify.capture.\(UUID().uuidString)") {
+    check(CaptureSettings.current(in: store) == CaptureSettings(includeCursor: false, windowShadow: true),
+          "defaults: no cursor, window shadow on")
+    store.set(true, forKey: CaptureSettings.cursorKey); store.set(false, forKey: CaptureSettings.shadowKey)
+    check(CaptureSettings.current(in: store) == CaptureSettings(includeCursor: true, windowShadow: false),
+          "saved capture settings are read back")
+}
+check(AfterCaptureAction(rawValue: "openEditor") == .openEditor && AfterCaptureAction(rawValue: "bogus") == nil,
+      "after-capture action round-trips by raw value")
+check(Set(AfterCaptureAction.allCases.map(\.title)).count == AfterCaptureAction.allCases.count, "after-capture titles are distinct")
+
+// MARK: Redaction rendering (blur tool)
+check(RedactRenderer.blockSize(for: CGSize(width: 200, height: 20)) == 10, "a single text line gets 10 px blocks, not 2")
+check(RedactRenderer.blockSize(for: CGSize(width: 900, height: 600)) == 64, "large areas cap at 64 px blocks")
+check(RedactRenderer.blockSize(for: CGSize(width: 5, height: 5)) == 10, "tiny areas still get a hiding block size")
+check(RedactRenderer.blurRadius(for: CGSize(width: 200, height: 20)) >= 10, "blur radius is strong enough for a text line")
+
+/// A striped image standing in for text: alternating black/white 2 px rows.
+func stripes(width: Int, height: Int) -> CGImage? {
+    guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return nil }
+    for y in stride(from: 0, to: height, by: 2) {
+        ctx.setFillColor(CGColor(gray: (y / 2) % 2 == 0 ? 0 : 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: y, width: width, height: 2))
+    }
+    return ctx.makeImage()
+}
+/// Spread between the darkest and lightest grey values — high means the detail is still visible.
+func contrast(_ image: CGImage) -> Int {
+    let w = image.width, h = image.height
+    var pixels = [UInt8](repeating: 0, count: w * h * 4)
+    guard let ctx = CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return 255 }
+    ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+    var lo = 255, hi = 0
+    for y in 2..<(h - 2) { for x in 2..<(w - 2) { let v = Int(pixels[(y * w + x) * 4]); lo = min(lo, v); hi = max(hi, v) } }
+    return hi - lo
+}
+if let text = stripes(width: 200, height: 24) {
+    check(contrast(text) > 200, "fixture has full contrast before redaction")
+    for style in RedactStyle.allCases {
+        if let out = RedactRenderer.render(text, rect: CGRect(x: 0, y: 0, width: 200, height: 24), style: style) {
+            check(out.width == 200 && out.height == 24, "\(style.title) keeps the region size")
+            check(contrast(out) < 90, "\(style.title) hides fine detail in a text-sized area (contrast \(contrast(out)))")
+        } else { check(false, "\(style.title) renders") }
+    }
+    check(RedactRenderer.render(text, rect: CGRect(x: 500, y: 500, width: 20, height: 20), style: .blur) == nil,
+          "a rect outside the image renders nothing")
+    check(RedactRenderer.render(text, rect: CGRect(x: 190, y: 0, width: 40, height: 24), style: .pixelate)?.width == 10,
+          "a rect hanging off the edge is clipped to the image")
+}
+
+// MARK: Redaction style on annotations
+var redactDoc = AnnotationDocument()
+let pix = redactDoc.add(.blur, start: .zero, end: CGPoint(x: 10, y: 10))
+check(pix.redactStyle == .pixelate, "new blur defaults to pixelate")
+let solidBlur = redactDoc.add(.blur, start: .zero, end: CGPoint(x: 10, y: 10), redactStyle: .solid)
+check(solidBlur.redactStyle == .solid, "blur keeps the chosen style")
+check(redactDoc.add(.rect, start: .zero, end: CGPoint(x: 1, y: 1), redactStyle: .solid).redactStyle == nil,
+      "non-blur annotations carry no redaction style")
+redactDoc.restyle(id: pix.id, to: AnnotationStyle(redactStyle: .blur))
+check(redactDoc.items.first { $0.id == pix.id }?.redactStyle == .blur, "restyling switches a blur's style")
+check(redactDoc.insertCopy(of: solidBlur).redactStyle == .solid, "copies keep the redaction style")
+if let legacy = try? JSONDecoder().decode(AnnotationStyle.self, from: Data(##"{"colorHex":"#FF0000","thickness":3,"filled":false,"opacity":1,"stepStyle":"number","lineStyle":"solid","startHead":"none","endHead":"arrow","arrowSize":"medium"}"##.utf8)) {
+    check(legacy.redactStyle == nil, "styles saved before this release still load")
+} else { check(false, "legacy saved style decodes") }
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

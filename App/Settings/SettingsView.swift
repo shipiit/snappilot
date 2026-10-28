@@ -8,11 +8,13 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             general.tabItem { Label("General", systemImage: "gearshape") }
+            ScreenshotSettingsTab().tabItem { Label("Screenshots", systemImage: "camera.viewfinder") }
+            RecordingSettingsTab().tabItem { Label("Recording", systemImage: "record.circle") }
             presets.tabItem { Label("Presets", systemImage: "slider.horizontal.3") }
             shortcuts.tabItem { Label("Shortcuts", systemImage: "keyboard") }
             about.tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 560, height: 430)
+        .frame(width: 620, height: 560)
     }
 
     private var general: some View {

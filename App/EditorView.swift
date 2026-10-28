@@ -231,10 +231,18 @@ struct EditorView: View {
             Button { copy() } label: { Image(systemName: "doc.on.doc") }.help("Copy")
             Button { share() } label: { Image(systemName: "square.and.arrow.up") }.help("Share")
             Menu {
-                ForEach(ExportFormat.allCases) { format in
-                    Button(format.title) { save(format) }
+                Button("Save as New Capture", systemImage: "plus.square.on.square") { model.saveAsNewCapture() }
+                if model.canSaveToOriginal, let name = model.externalSourceURL?.lastPathComponent {
+                    Button("Save to Original File (\(name))", systemImage: "square.and.arrow.down.on.square") { model.saveToOriginalFile() }
                 }
-            } label: { Image(systemName: "square.and.arrow.down") }.help("Export")
+                Divider()
+                Section("Export As") {
+                    ForEach(ExportFormat.allCases) { format in
+                        Button(format.title) { save(format) }
+                    }
+                }
+            } label: { Image(systemName: "square.and.arrow.down") }
+                .help("Save: Done replaces this capture · Save as New keeps the original · Export to a file")
             Divider().frame(height: 28).padding(.horizontal, 2)
             HStack(spacing: 2) {
                 Button { zoom = max(0.25, zoom - 0.1) } label: { Image(systemName: "minus") }
@@ -312,7 +320,8 @@ struct EditorView: View {
                                            colorHex: model.colorHex, thickness: model.thickness,
                                            stepNumber: d.tool == .step ? model.doc.stepCount + 1 : nil,
                                            filled: model.filled, opacity: model.opacity,
-                                           stepStyle: model.stepStyle, lineStyle: model.lineStyle)
+                                           stepStyle: model.stepStyle, lineStyle: model.lineStyle,
+                                           redactStyle: d.tool == .blur ? model.redactStyle : nil)
                         drawLive(a, in: ctx, fit: fit)
                     }
                     if freehandPoints.count > 1 {
@@ -520,6 +529,18 @@ struct EditorView: View {
 
                 if panelTool == .rect || panelTool == .ellipse {
                     Toggle("Fill shape", isOn: $model.filled)
+                }
+                if panelTool == .blur {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("REDACT STYLE").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                        Picker("Redact style", selection: $model.redactStyle) {
+                            ForEach(RedactStyle.allCases) { Text($0.title).tag($0) }
+                        }.pickerStyle(.segmented).labelsHidden()
+                        Text(model.redactStyle == .solid
+                             ? "Covers completely — best for passwords and personal data."
+                             : "Hides detail. For anything sensitive, Solid can't be undone by anyone.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -1004,8 +1025,14 @@ struct EditorView: View {
         case .highlight:
             ctx.fill(Path(rect), with: .color(color.opacity(0.35 * a.opacity)))
         case .blur:
-            ctx.fill(Path(roundedRect: rect, cornerRadius: 3), with: .color(.gray.opacity(0.55)))
-            ctx.draw(Text(Image(systemName: "eye.slash.fill")).foregroundColor(.white), at: CGPoint(x: rect.midX, y: rect.midY))
+            // The real redaction, live — what you see is what gets saved.
+            let pixels = selectionRect(from: a.start, to: a.end)
+            if let preview = RedactPreviewCache.image(base: model.base, rect: pixels, style: a.redactStyle ?? .pixelate) {
+                let clipped = pixels.intersection(CGRect(origin: .zero, size: model.pixelSize)).integral
+                ctx.draw(Image(decorative: preview, scale: 1), in: viewRect(clipped, fit: fit))
+            } else {
+                ctx.fill(Path(rect), with: .color(.gray.opacity(0.55)))
+            }
         case .spotlight:
             ctx.fill(Path(roundedRect: rect, cornerRadius: 8), with: .color(.black.opacity(0.5)))
             ctx.stroke(Path(roundedRect: rect.insetBy(dx: -3, dy: -3), cornerRadius: 8), with: .color(.white), lineWidth: 3)

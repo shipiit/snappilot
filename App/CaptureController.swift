@@ -45,7 +45,7 @@ enum CaptureController {
         let s = scale(for: display.displayID)
         config.width = Int(CGFloat(display.width) * s)
         config.height = Int(CGFloat(display.height) * s)
-        config.showsCursor = false
+        config.showsCursor = CaptureSettings.current().includeCursor
         config.captureResolution = .best
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
     }
@@ -58,7 +58,9 @@ enum CaptureController {
         let s = window.owningApplication.flatMap { _ in NSScreen.main?.backingScaleFactor } ?? 2.0
         config.width = Int(window.frame.width * s)
         config.height = Int(window.frame.height * s)
-        config.showsCursor = false
+        let settings = CaptureSettings.current()
+        config.showsCursor = settings.includeCursor
+        config.ignoreShadowsSingleWindow = !settings.windowShadow
         config.captureResolution = .best
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
     }

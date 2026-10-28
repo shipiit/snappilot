@@ -183,7 +183,7 @@ final class OverlayView: NSView {
 
     let displayID: CGDirectDisplayID
     var screenshot: CGImage?
-    var magnifierEnabled = true
+    var magnifierEnabled = Preference.value("pref.captureMagnifier", default: true)
 
     private var start: NSPoint?
     private var current: NSPoint?

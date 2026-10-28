@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Standard Mac editing shortcuts for the editor window (⌘Z, ⇧⌘Z, ⌘C, ⌘X, ⌘V, ⌘D, ⌘], ⌘[,
-/// ⌘S, ⇧⌘S). A local key monitor sees the event before the main menu does, and it steps
+/// Object editing shortcuts for the editor window (⌘C, ⌘X, ⌘V, ⌘D, ⌘], ⌘[, ⌘S, ⇧⌘S, ⌥⌘S).
+/// ⌘Z / ⇧⌘Z go through Edit › Undo / Redo via the window's undo manager. A local key monitor sees the event before the main menu does, and it steps
 /// aside whenever a text field has focus so typing keeps its own undo / copy / paste.
 struct EditorShortcuts: NSViewRepresentable {
     let model: EditorModel
@@ -20,11 +20,14 @@ struct EditorShortcuts: NSViewRepresentable {
     private func perform(_ event: NSEvent) -> Bool {
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let shift = mods.contains(.shift)
-        guard mods.contains(.command), !mods.contains(.control), !mods.contains(.option),
+        guard mods.contains(.command), !mods.contains(.control),
               let key = event.charactersIgnoringModifiers?.lowercased() else { return false }
+        if mods.contains(.option) {
+            guard key == "s", !shift else { return false }
+            model.saveAsNewCapture()   // ⌥⌘S
+            return true
+        }
         switch (key, shift) {
-        case ("z", false): model.undo()
-        case ("z", true): model.redo()
         case ("c", false):
             if model.copySelection() { Toast.show("Copied object", symbol: "doc.on.doc") } else { copyImage() }
         case ("x", false):
