@@ -5,243 +5,191 @@
 <h1 align="center">Snappilot</h1>
 
 <p align="center">
-  <b>The free, open-source Snagit alternative for macOS.</b><br>
-  Capture · Annotate · Record · OCR — native, on-device, and private.
+  <b>The free, open-source screen capture studio for macOS.</b><br>
+  Capture, annotate, record and extract text — natively, and entirely on your Mac.
 </p>
 
 <p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2014%2B-black?logo=apple">
-  <img alt="Swift" src="https://img.shields.io/badge/Swift-6-orange?logo=swift">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
-  <img alt="Privacy" src="https://img.shields.io/badge/privacy-100%25%20on--device-brightgreen">
+  <a href="https://github.com/shipiit/snappilot/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/shipiit/snappilot?color=5661F6"></a>
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple">
+  <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
+  <img alt="On-device" src="https://img.shields.io/badge/privacy-100%25%20on--device-2EA043">
 </p>
 
 <p align="center">
-  <a href="https://github.com/shipiit/snappilot/releases/latest/download/Snappilot.dmg">
-    <img alt="Download Snappilot.dmg" src="https://img.shields.io/badge/⬇%20Download-Snappilot.dmg-FF5E7A?style=for-the-badge">
-  </a>
-  &nbsp;
-  <a href="https://github.com/shipiit/snappilot/releases/latest">
-    <img alt="Latest release" src="https://img.shields.io/github/v/release/shipiit/snappilot?style=for-the-badge&color=555">
-  </a>
-  &nbsp;
-  <a href="https://snappilot.vercel.app">
-    <img alt="Snappilot website" src="https://img.shields.io/badge/🌐%20Website-Explore%20Snappilot-6C63FF?style=for-the-badge">
-  </a>
-  &nbsp;
-  <a href="https://snappilot.vercel.app/docs">
-    <img alt="Snappilot documentation" src="https://img.shields.io/badge/📖%20Docs-Read%20the%20guide-222222?style=for-the-badge">
-  </a>
+  <a href="https://github.com/shipiit/snappilot/releases/latest/download/Snappilot.dmg"><b>Download for Mac</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://snappilot.vercel.app">Website</a>
+  &nbsp;·&nbsp;
+  <a href="https://snappilot.vercel.app/docs">Documentation</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/shipiit/snappilot/releases">Release notes</a>
 </p>
 
----
-
-## 📥 Download & install
-
-1. **[Download Snappilot.dmg](https://github.com/shipiit/snappilot/releases/latest/download/Snappilot.dmg)** from the latest release.
-2. Open the `.dmg` and **drag Snappilot onto the Applications folder**.
-3. First launch: **right-click Snappilot → Open** (the app is signed but not yet notarized),
-   or run `xattr -cr /Applications/Snappilot.app`.
-4. On first capture/record, allow **Screen Recording** (and Microphone / Camera if used) in
-   **System Settings → Privacy & Security**.
-
-> Prefer to build from source? See [Build & run](#️-build--run) below.
+<!-- Demo GIF: save a 5–8 s recording as docs/assets/demo.gif, then uncomment the next three lines.
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="Capturing a region, annotating it and saving it with Snappilot" width="90%">
+</p>
+-->
 
 ---
 
-## ✨ Overview
+## Why Snappilot
 
-Snappilot is a fast, modern **screen-capture studio** for macOS — think Snagit or CleanShot,
-but **free, open-source, and 100% private**. Grab exactly the part of the screen you want,
-annotate it in a Snagit-style editor, record it to a compact HEVC video (with a webcam
-bubble, mic and countdown), and pull selectable text out of anything with on-device OCR.
-Every capture auto-saves to a **searchable local library** — searchable even by the words
-*inside* your screenshots.
+Snappilot does what Snagit and CleanShot do — region capture, a full annotation editor,
+screen recording and OCR — without a subscription, an account, or anything leaving your Mac.
 
-Explore the interactive product experience at the **[Snappilot website](https://snappilot.vercel.app)**,
-or visit the **[complete documentation](https://snappilot.vercel.app/docs)** for installation,
-permissions, capture tools, recording, Meeting Mode, tasks, notes, architecture, and troubleshooting.
-
-### Why Snappilot?
-
-| | |
+|  |  |
 |---|---|
-| 🆓 **Free & open source** | No license, no subscription, MIT-licensed. |
-| 🔒 **Private by design** | 100% on-device. No telemetry, no accounts, no cloud. OCR runs locally via Apple Vision. |
-| ⚡ **Native & fast** | Pure Swift + ScreenCaptureKit — lightweight, Retina-crisp, no Electron. |
-| 🎨 **Genuinely powerful** | Magnifier capture, a full annotation editor, screen recording, video trim/annotation, GIF export, auto-redaction, and more. |
+| **Free and open source** | MIT licensed. No trial, no paywall, no subscription. |
+| **Private by design** | No telemetry, no cloud, no sign-in. Text recognition and transcription run on-device with Apple's frameworks. |
+| **Native and light** | Swift, SwiftUI and ScreenCaptureKit. No Electron; small, fast and Retina-sharp. |
+| **Searchable library** | Every capture is saved locally and indexed by the text inside it. |
 
-### Typical workflow
+## What's new in 0.2
 
-1. **Capture** — `⌃⇧1` and drag a region (or record with `⌃⇧5`).
-2. **Annotate** — the editor opens; add arrows, callouts, step numbers, blur, stamps.
-3. **Share** — **Copy**, **Save**, drag out, or turn a recording into a **GIF**.
-4. **Find it later** — it's in your library, searchable by its OCR'd text.
+- **Re-open and keep editing.** Double-click any capture to open it in the editor — arrows,
+  text and shapes stay editable. *Save as New Capture* keeps the original.
+- **Open your own files.** Annotate PNG, JPEG, HEIC, TIFF and MP4 files via **File › Open**,
+  Finder's **Open With**, or by dropping them on the Dock icon.
+- **Choose a save format.** PNG, JPEG or HEIC, with a quality setting.
+- **Stronger redaction.** Pixelate, Blur or Solid — shown live while you edit.
+- **A redesigned dashboard and menu bar**, new Screenshots and Recording settings, standard
+  editing shortcuts (⌘Z, ⌘C/⌘V, ⌘D, arrow-key nudge), alignment guides and saved styles.
+- **Lighter and steadier:** much lower memory use, recordings with a single mixed audio track,
+  and a fix for a crash when starting a capture.
+
+See the [full release notes](https://github.com/shipiit/snappilot/releases/tag/v0.2.0).
+
+## Screenshots
 
 <table>
   <tr>
-    <td width="50%" align="center" valign="top">
-      <img src="docs/assets/dashboard.png" alt="Snappilot dashboard"><br><br>
-      <b>🏠 Dashboard</b><br>
-      <sub>Colorful quick-capture cards (Region · Window · Full Screen · Grab Text · Record),
-      one row of recording options (system audio · mic · camera · cursor · countdown · quality),
-      and a searchable library of every capture — with copy, favorite &amp; delete.</sub>
+    <td width="50%" valign="top">
+      <img src="docs/assets/dashboard.png" alt="Snappilot dashboard"><br>
+      <b>Dashboard</b> — quick capture tools, recording options, and a searchable library.
     </td>
-    <td width="50%" align="center" valign="top">
-      <img src="docs/assets/editor.png" alt="Snappilot annotation editor"><br><br>
-      <b>✏️ Annotation editor</b><br>
-      <sub>Snagit-style toolbar (arrow, text, callout, shapes, step, highlight, blur, pen,
-      stamp, crop), a live <b>Quick Styles</b> preset grid, and <b>Tool Properties</b>
-      (color, thickness, opacity, arrow start/end/size) on a clean canvas.</sub>
+    <td width="50%" valign="top">
+      <img src="docs/assets/editor.png" alt="Snappilot annotation editor"><br>
+      <b>Editor</b> — arrows, callouts, steps, highlight, blur, stamps, layers and quick styles.
     </td>
   </tr>
 </table>
 
-## 🚀 Features
+## Features
 
 ### Capture
-- 🟦 **Region** · 🪟 **Window** · 🖥️ **Full Screen** — a crisp crosshair overlay with a
-  **live magnifier loupe**, pixel dimensions, and keyboard hints.
-- ⏱️ **Optional delay** — off captures immediately; turn it on for a 3s or 5s countdown.
-- 🧩 Compact, responsive **Quick Capture** tiles keep capture and recording actions visible
-  without oversized cards; editing actions stay in the sidebar and Recent Captures.
-- ⌨️ **Global shortcuts** — trigger any capture from anywhere. Fully **customizable**.
-- 🫥 Snappilot **hides itself** during capture so it never lands in your shot.
+- **Region, window and full screen**, with a magnifier loupe and live pixel dimensions.
+- **Scrolling capture** that stitches a long page into one image.
+- **Grab Text** — select any area and copy its text (Apple Vision OCR).
+- **Webcam photo**, **step recorder** (one screenshot per click), and **presets**.
+- Optional delay, mouse pointer and window shadow; choose to open the editor, copy to the
+  clipboard, or just save after each capture.
+- Global shortcuts for every capture, all customizable.
 
-### Annotate (Snagit-style editor)
-- ➡️ Arrows, lines, rectangles, ellipses, callouts, freehand pen
-- 🔢 **Step badges** — auto-numbered `1·2·3`, `A·B·C`, or `a·b·c`
-- 🖍️ Highlighter · 🙈 **Blur / redact** · ✂️ **Crop** · ⭐ **Stamps** (emoji)
-- 🛡️ **Auto-redact** — one click blurs detected emails & card numbers (on-device OCR)
-- 🖼️ **Polished frames** — wrap a shot in a gradient background + shadow for sharing
-- 🎨 **Quick Styles** — 10+ one-click presets per tool (solid / dashed / dotted, dot & bar
-  arrow heads, fills, colors)
-- 🎚️ Tool properties: custom color, thickness, opacity, arrow **start/end/size**
-- ↩️ Non-destructive layers, undo/redo, move & edit anything
-- ✏️ **Annotate Again** — reopen any image from Recent Captures and save changes back to
-  the same library item; also available as **Capture → Annotate Latest Image** in the macOS menu bar
-- 🖼️ Drag screenshots, logos, or other images onto the canvas as movable, scalable overlays
-- 🕘 Snagit-style **Recent** tray inside the editor—click or drag older captures onto the canvas
-- 📐 Interactive corner resizing, exact width/height, aspect lock, replace, rotate, flip,
-  fit-to-canvas, opacity, layer ordering, duplication, and overlay background removal
-- ✨ Smart Move · editable OCR regions · Spotlight · Magnify · local Simplify · background removal/blur
-- 📤 Native macOS sharing via AirDrop, Messages, Mail, and installed sharing/storage extensions
+### Annotate
+- Arrows, lines, shapes, text, callouts, freehand pen, highlighter, emoji stamps and
+  auto-numbered **step badges** (1·2·3, A·B·C).
+- **Blur / redact** as pixelate, blur or solid; **auto-redact** detects emails and card numbers.
+- Select any annotation to restyle it, resize it with handles, or copy and paste it.
+- **Image layers** — drop in other captures or files, stack them, and click to bring one forward.
+- Alignment guides, saved styles with *apply to all*, crop, rotate, rounded corners, and an
+  expandable canvas for combining screenshots.
+- Smart Move, editable recognized text, spotlight, magnify, background removal.
+- Edits are saved as an editable project next to each capture, so you can come back later.
 
 ### Record
-- 🎥 Record a **region or the full screen** → compact **HEVC MP4** (Small / Balanced / High quality)
-- 🔊 System audio · 🎙️ Microphone · 📷 **Webcam overlay** · 🖱️ cursor — all optional
-- 🎭 Live local webcam background effects: none, background blur, or studio background
-- 🎙️ **Microphone noise cancellation** — voice-processed mic (noise suppression + echo cancellation)
-- ⏸️ **Pause / Resume** — the paused span is stitched out cleanly
-- ⏱️ **"Ready to Record"** panel + **3·2·1 countdown** (outside the frame) + a live **frame indicator**
-- ✍️ **Draw on screen while recording** — pen, highlighter, a fading **laser pointer** & arrows,
-  captured into the video. Ink **auto-fades** when you stop, Google-Meet style (press `Esc` to exit).
-- 📸 **Screenshot while recording** — grab a still without stopping the recording
-- ▶️ Recordings open in Snappilot's **own player** — never QuickTime — with **Trim**,
-  **timed video annotation** (whole clip, five-second moment, current-to-end, or trim range),
-  imported image overlays, frame export, clip combining, playback speed, and **GIF export**
+- Record a **region or the whole screen** to compact HEVC MP4, at three quality levels.
+- System audio, microphone (with noise cancellation) and a webcam bubble with background blur.
+- Countdown, pause / resume, cursor highlight and click ripples, drawing on screen while
+  recording, and screenshots mid-recording.
+- Built-in player with trim, frame export, timed annotations, clip combining and **GIF export**.
 
-### 🧠 Meeting Mode (on-device AI)
-- 🎙️ **Record a call** (Google Meet / Zoom) and get an automatic **transcript** — all processed
-  **on your Mac**, nothing uploaded.
-- 🗣️ Speakers split into **You vs Participants** automatically (mic vs system audio); real
-  **per-speaker names** are read from **Google Meet's live captions** when they're on.
-- ✅ Auto-generated **Summary, Action Items & Key Points** — saved as Markdown next to the
-  recording, searchable, and one-click **imported into the task board**.
+### Meeting Mode
+- Record a call and get an on-device **transcript**, split into *You* and *Participants*
+  (speaker names come from Google Meet captions when they're on).
+- Automatic **summary, action items and key points**, saved as Markdown and importable into
+  the task board.
 
-### 📸 Capture, extended
-- 📜 **Scrolling capture** — auto-scroll a long page and stitch it into one tall image
-- 🗂️ **Collections** — drag captures into named groups · 🏷️ **tags** · 📌 **Pin to Screen**
-- 📄 **PDF export** — pick images and export a multi-page PDF
+### Organize
+- A local **library** that's searchable by the text inside your captures, with favorites,
+  tags, collections, PDF and batch export, and pin-to-screen.
+- A **task board** (To do / In progress / Review / Done) with subtasks, comments,
+  attachments and due-date reminders.
+- A **Markdown notes** workspace with live preview and images.
 
-### ✅ Tasks — a Linear-style board
-- 🗂️ Board **To do / In progress / Review / Done** + a **List view**; **drag** cards to change status
-- 🔑 Issue-key chips · 🚩 priority · 🏷️ labels · 👤 assignee avatars · subtask **progress bars**
-- 📝 Full task detail page: **Markdown** description, **subtasks with their own descriptions**,
-  **comments** (Markdown), activity history, image/file **attachments**
-- 🔔 **Due-date reminders** (local notifications) · ⬆️ export to Markdown / **Apple Reminders**
+## Keyboard shortcuts
 
-### 📓 Notes — a Markdown workspace
-- ✍️ **Live split editor** — raw Markdown ↔ rendered preview, updating as you type
-- 🖼️ **Images in Markdown** (insert, drag-and-drop, `![alt](url)` renders inline)
-- ⭐ favorite · 📌 pin · 🗄️ archive · duplicate · export; search; word count & reading time
-- 🧭 Notes list lives in the **collapsible** main sidebar for a distraction-free editor
+| Shortcut | Action | Shortcut | Action |
+|---|---|---|---|
+| `⌃⇧1` | Capture region | `⌃⇧5` | Record region |
+| `⌃⇧2` | Capture window | `⌃⇧6` | Record screen |
+| `⌃⇧3` | Capture full screen | `⌃⇧7` | Scrolling capture |
+| `⌃⇧4` | Grab text (OCR) | `⌃⇧8` | Record meeting |
+| `⌘O` | Open a file to annotate | `⌃⇧.` | Stop recording |
 
-### OCR & Library
-- 🔤 **Grab Text** — extract selectable text from any region via Apple Vision
-- 🗂️ Every capture **auto-saves** to a local library, **searchable by the text inside it**
-- ⭐ Favorites · ✏️ annotate again · 📋 copy · 🗑️ delete · 🔎 instant search · 💾 live **storage usage** in the sidebar
+Global shortcuts can be changed in **Settings › Shortcuts**. In the editor: letter keys pick
+tools (`A` arrow, `T` text, `R` rectangle, `S` step, `B` blur, `V` select), `⌘Z` / `⇧⌘Z`
+undo and redo, and `⌥⌘S` saves as a new capture.
 
-### Design
-- 🌗 Full **light & dark** theme support (follows your system)
-- 🧭 Clean **collapsible** sidebar dashboard · menu-bar quick access · full app menu with shortcuts
+## Install
 
-## ⌨️ Default shortcuts
+1. [Download **Snappilot.dmg**](https://github.com/shipiit/snappilot/releases/latest/download/Snappilot.dmg)
+   and drag Snappilot into **Applications**.
+2. The app isn't notarized yet, so the first time, **right-click it › Open**
+   (or run `xattr -cr /Applications/Snappilot.app`).
+3. When asked, allow **Screen Recording** — plus Microphone and Camera if you record with them —
+   in **System Settings › Privacy & Security**.
 
-| Shortcut | Action |          | Shortcut | Action |
-|----------|--------|----------|----------|--------|
-| `⌃⇧1`    | Region |          | `⌃⇧6`    | Record Screen |
-| `⌃⇧2`    | Window |          | `⌃⇧7`    | Scrolling Capture |
-| `⌃⇧3`    | Full Screen |     | `⌃⇧8`    | Record Meeting |
-| `⌃⇧4`    | Grab Text (OCR) | | `⌃⇧.`    | Stop Recording |
-| `⌃⇧5`    | Record Region |  |          | *(all customizable in Settings)* |
+Requires macOS 14 Sonoma or later.
 
-## 🛠️ Build & run
+## Privacy
 
-Requires **macOS 14+**, **Xcode 16+**, and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`).
+Snappilot has no servers. Captures, recordings, transcripts and notes are stored in
+`~/Pictures/Snappilot` and never uploaded. There is no telemetry, analytics or account.
+
+## Build from source
+
+Requires Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
 
 ```bash
-xcodegen generate        # creates Snappilot.xcodeproj
-open Snappilot.xcodeproj  # then Run (⌘R)
+git clone https://github.com/shipiit/snappilot.git && cd snappilot
+xcodegen generate          # creates Snappilot.xcodeproj
+open Snappilot.xcodeproj   # then Run (⌘R)
 
-swift run snapverify      # framework-free logic tests for SnapCore
+swift run snapverify       # logic tests for SnapCore
 ```
 
-On first capture/record, macOS asks for **Screen Recording** (and, if used, Microphone /
-Camera) permission — enable Snappilot in **System Settings → Privacy & Security**.
+### Project layout
 
-## 🏗️ Architecture
+- **`Sources/SnapCore`** — a UI-free Swift package with the testable logic: capture geometry,
+  OCR, image operations, redaction, the annotation model, project files and the library index.
+- **`App`** — the SwiftUI and AppKit app: capture overlay, ScreenCaptureKit, editor,
+  recorder, player, dashboard, menu bar and settings.
 
-- **`SnapCore`** — a UI-free, unit-tested Swift package: capture/crop geometry, the Vision
-  OCR wrapper, image ops, sensitive-data detection, the annotation layer model, and the
-  local-library index.
-- **`App`** — SwiftUI + AppKit: capture overlay, ScreenCaptureKit controller, the
-  annotation editor, recorder, video player, menu-bar UI, hotkeys, and settings.
+## Roadmap
 
-Logic lives in `SnapCore` so it can be tested without a UI; everything visual consumes it
-through clean value types.
+- More customizable shortcuts and appearance settings
+- Editor: multi-select, layers panel, grouping, callout tails and text styling
+- Smart Redact with reviewable categories (phone numbers, addresses, IPs and more)
+- Step-by-step guides that export to PDF and Markdown
+- Video timeline editing and captions from transcripts
 
-## 🗺️ Roadmap
+Ideas and requests are welcome in [Issues](https://github.com/shipiit/snappilot/issues).
 
-**Shipped:** ✅ Meeting Mode · ✅ Scrolling capture · ✅ Step Recorder · ✅ Smart Move ·
-✅ Editable OCR · ✅ Background removal · ✅ Collections & tags · ✅ PDF/batch export ·
-✅ Clip combining · ✅ Pause/Resume · ✅ Noise cancellation · ✅ Task board · ✅ Notes workspace
+## Contributing
 
-**Next:**
-- Timeline view + Filter / Sort / Group on the task board
-- Per-subtask due dates & assignees · linked issues
-- Note folders & backlinks · slash-commands in the editor
-- Templates / step-guides · quick share
+Contributions are welcome — please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+[Report a bug](https://github.com/shipiit/snappilot/issues/new/choose) or
+[request a feature](https://github.com/shipiit/snappilot/issues/new/choose).
+Security issues should be reported privately; see [SECURITY.md](SECURITY.md).
 
-## 🤝 Contributing
+## More from Shipiit
 
-Contributions are welcome! Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** first.
+- [**Mac Sweep**](https://github.com/shipiit/mac-sweep) — clean, monitor and understand your Mac.
+- [**KeyVault**](https://github.com/shipiit/keyvault) — a local-only, zero-knowledge password manager for Chrome.
 
-- 🐛 [Report a bug](https://github.com/shipiit/snappilot/issues/new/choose)
-- 💡 [Request a feature](https://github.com/shipiit/snappilot/issues/new/choose)
-- 🔀 `main` is protected — changes land via **pull request** with review.
+## License
 
-## 🛡️ Security
-
-Found a vulnerability? Please report it **privately** — see **[SECURITY.md](SECURITY.md)**.
-Do not open a public issue for security problems.
-
-## 🔒 Privacy
-
-100% on-device. No telemetry, no third-party services, no account. OCR runs locally via
-Apple Vision; recordings and captures never leave your Mac.
-
-## 📄 License
-
-MIT.
+MIT
